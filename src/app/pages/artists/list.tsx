@@ -83,7 +83,7 @@ export default function ArtistsList() {
       )}
 
       {isGridView && (
-        <MemoListWrapper className="px-0">
+        <MemoListWrapper className="px-0 md:px-0">
           <GridViewWrapper
             list={artists}
             data-testid="artists-grid"

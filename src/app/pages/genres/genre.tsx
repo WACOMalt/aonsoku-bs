@@ -88,7 +88,7 @@ export default function Genre() {
         <GenreButtons genre={genre} />
       </ListWrapper>
 
-      <ListWrapper className="px-0 pt-0">
+      <ListWrapper className="px-0 md:px-0 pt-0">
         <GridViewWrapper list={albums} type="genre">
           {(album) => <AlbumGridCard album={album} />}
         </GridViewWrapper>

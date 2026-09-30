@@ -16,7 +16,7 @@ export default function AlbumsList() {
     <div className="w-full h-full">
       <AlbumsHeader albumCount={albumsCount} />
 
-      <ListWrapper className="px-0">
+      <ListWrapper className="px-0 md:px-0">
         <GridViewWrapper list={albums} data-testid="albums-grid" type="albums">
           {(album) => <AlbumGridCard album={album} />}
         </GridViewWrapper>

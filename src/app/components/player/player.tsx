@@ -1,4 +1,11 @@
-import { memo, useCallback, useEffect, useRef } from 'react'
+import {
+  memo,
+  RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react'
 import { getProxyURL } from '@/api/podcastClient'
 import { MiniPlayerButton } from '@/app/components/mini-player/button'
 import { RadioInfo } from '@/app/components/player/radio-info'
@@ -82,6 +89,10 @@ export function Player() {
   const nativeSongs = usesNativeSongPlayer(canOutputAudio, gaplessEnabled)
 
   const song = currentList[currentSongIndex]
+
+  const buttonsRef = useRef<HTMLDivElement>(null)
+  useBalancedWrap(buttonsRef)
+
   const radio = radioList[currentSongIndex]
   const podcast = podcastList[currentSongIndex]
 
@@ -190,15 +201,15 @@ export function Player() {
         </div>
 
         {/* Desktop player layout */}
-        <div className="w-full h-full hidden md:grid compact:hidden grid-cols-player gap-2 px-4 items-center">
+        <div className="w-full h-full hidden md:grid compact:hidden grid-cols-[minmax(250px,1fr)_minmax(0,40rem)_minmax(250px,1fr)] gap-2 px-4 items-center">
           {/* Track Info */}
-          <div className="flex items-center gap-2 w-full">
+          <div className="flex items-center gap-2 w-full min-w-0">
             {isSong && <MemoTrackInfo song={song} />}
             {isRadio && <MemoRadioInfo radio={radio} />}
             {isPodcast && <MemoPodcastInfo podcast={podcast} />}
           </div>
           {/* Main Controls */}
-          <div className="col-span-2 flex flex-col justify-center items-center px-4 gap-1">
+          <div className="flex flex-col justify-center items-center px-4 gap-1 min-w-0">
             <MemoPlayerControls
               song={song}
               radio={radio}
@@ -210,9 +221,13 @@ export function Player() {
               <MemoPlayerProgress audioRef={getAudioRef()} />
             )}
           </div>
-          {/* Remain Controls and Volume */}
-          <div className="flex items-center w-full justify-end">
-            <div className="flex items-center gap-1">
+          {/* Remain Controls and Volume: wrap onto a second line rather
+              than run into the controls when the window is narrow. */}
+          <div className="flex items-center w-full min-w-0 justify-end">
+            <div
+              ref={buttonsRef}
+              className="flex flex-wrap items-center justify-end gap-1"
+            >
               {isSong && !hideFavoritesSection && (
                 <MemoPlayerLikeButton disabled={!song} />
               )}
@@ -282,4 +297,41 @@ export function Player() {
       </footer>
     </>
   )
+}
+
+/**
+ * When a row of buttons does not fit its space and wraps, splits it evenly
+ * over two lines instead of leaving one or two buttons on the second.
+ */
+function useBalancedWrap(ref: RefObject<HTMLDivElement>) {
+  useLayoutEffect(() => {
+    const row = ref.current
+    const space = row?.parentElement
+    if (!row || !space) return
+
+    const update = () => {
+      const items = [...row.children] as HTMLElement[]
+      const gap = Number.parseFloat(getComputedStyle(row).columnGap) || 0
+      const widths = items.map((item) => item.getBoundingClientRect().width)
+      const total = (count: number) =>
+        widths.slice(0, count).reduce((sum, width) => sum + width, 0) +
+        gap * Math.max(0, count - 1)
+      const fits = total(items.length) <= space.clientWidth
+      const maxWidth = fits
+        ? ''
+        : `${Math.ceil(total(Math.ceil(items.length / 2))) + 1}px`
+      if (row.style.maxWidth !== maxWidth) row.style.maxWidth = maxWidth
+    }
+
+    const observer = new ResizeObserver(update)
+    observer.observe(space)
+    // Buttons come and go (radio, podcasts, Connect, Jam).
+    const mutations = new MutationObserver(update)
+    mutations.observe(row, { childList: true })
+    update()
+    return () => {
+      observer.disconnect()
+      mutations.disconnect()
+    }
+  }, [ref])
 }
