@@ -5,6 +5,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
 } from 'react'
 import { getProxyURL } from '@/api/podcastClient'
 import { MiniPlayerButton } from '@/app/components/mini-player/button'
@@ -90,8 +91,9 @@ export function Player() {
 
   const song = currentList[currentSongIndex]
 
+  const layoutRef = useRef<HTMLDivElement>(null)
   const buttonsRef = useRef<HTMLDivElement>(null)
-  useBalancedWrap(buttonsRef)
+  const buttonsLayout = useButtonsLayout(layoutRef, buttonsRef)
 
   const radio = radioList[currentSongIndex]
   const podcast = podcastList[currentSongIndex]
@@ -201,7 +203,13 @@ export function Player() {
         </div>
 
         {/* Desktop player layout */}
-        <div className="w-full h-full hidden md:grid compact:hidden grid-cols-[minmax(250px,1fr)_minmax(0,40rem)_minmax(250px,1fr)] gap-2 px-4 items-center">
+        <div
+          ref={layoutRef}
+          className="w-full h-full hidden md:grid compact:hidden gap-2 px-4 items-center"
+          style={{
+            gridTemplateColumns: `minmax(${buttonsLayout.side}px, 1fr) minmax(0, ${CENTER_MAX_WIDTH}px) minmax(${buttonsLayout.side}px, 1fr)`,
+          }}
+        >
           {/* Track Info */}
           <div className="flex items-center gap-2 w-full min-w-0">
             {isSong && <MemoTrackInfo song={song} />}
@@ -209,7 +217,7 @@ export function Player() {
             {isPodcast && <MemoPodcastInfo podcast={podcast} />}
           </div>
           {/* Main Controls */}
-          <div className="flex flex-col justify-center items-center px-4 gap-1 min-w-0">
+          <div className="flex flex-col justify-center items-center px-2 gap-1 min-w-0">
             <MemoPlayerControls
               song={song}
               radio={radio}
@@ -246,6 +254,7 @@ export function Player() {
               <MemoDevicePicker />
 
               <MemoPlayerVolume
+                expanded={buttonsLayout.volumeSlider}
                 audioRef={getAudioRef()}
                 disabled={!song && !radio && !podcast}
               />
@@ -299,32 +308,100 @@ export function Player() {
   )
 }
 
+// The player's columns: the controls in the middle up to their full width,
+// at least this wide on each side for the track info.
+const CENTER_MAX_WIDTH = 640
+const SIDE_MIN_WIDTH = 250
+// Room the controls keep (transport buttons and a short progress bar)
+// before the buttons on the right wrap instead.
+const CENTER_MIN_WIDTH = 260
+const VOLUME_BUTTON_WIDTH = 40
+// The inline volume slider, measured when it shows.
+let volumeSliderWidth = 172
+
+type ButtonsLayout = { side: number; volumeSlider: boolean }
+
 /**
- * When a row of buttons does not fit its space and wraps, splits it evenly
- * over two lines instead of leaving one or two buttons on the second.
+ * Lays out the buttons on the right of the desktop player from the room
+ * there is. The side columns stay equal so the controls stay centred; they
+ * take the width the buttons need, and the controls give up width (the
+ * progress bar shrinks) before the buttons wrap. When they do wrap, they
+ * split evenly over two lines. The volume shows as an inline slider only
+ * when it fits beside the controls at their full width.
  */
-function useBalancedWrap(ref: RefObject<HTMLDivElement>) {
+function useButtonsLayout(
+  layoutRef: RefObject<HTMLDivElement>,
+  rowRef: RefObject<HTMLDivElement>,
+) {
+  const [layout, setLayout] = useState<ButtonsLayout>({
+    side: SIDE_MIN_WIDTH,
+    volumeSlider: false,
+  })
+
   useLayoutEffect(() => {
-    const row = ref.current
-    const space = row?.parentElement
-    if (!row || !space) return
+    const grid = layoutRef.current
+    const row = rowRef.current
+    if (!grid || !row) return
 
     const update = () => {
-      const items = [...row.children] as HTMLElement[]
+      const gridStyle = getComputedStyle(grid)
+      const width =
+        grid.clientWidth -
+        Number.parseFloat(gridStyle.paddingLeft) -
+        Number.parseFloat(gridStyle.paddingRight)
+      // Hidden: the phone layout is showing.
+      if (width <= 0) return
+      const columnGap = Number.parseFloat(gridStyle.columnGap) || 0
       const gap = Number.parseFloat(getComputedStyle(row).columnGap) || 0
-      const widths = items.map((item) => item.getBoundingClientRect().width)
-      const total = (count: number) =>
-        widths.slice(0, count).reduce((sum, width) => sum + width, 0) +
-        gap * Math.max(0, count - 1)
-      const fits = total(items.length) <= space.clientWidth
-      const maxWidth = fits
-        ? ''
-        : `${Math.ceil(total(Math.ceil(items.length / 2))) + 1}px`
+
+      // Each button's width, with the volume as a plain button.
+      const widths: number[] = []
+      for (const item of [...row.children] as HTMLElement[]) {
+        let itemWidth = item.getBoundingClientRect().width
+        if (item.dataset.playerVolume !== undefined) {
+          if (item.dataset.expanded === 'true') volumeSliderWidth = itemWidth
+          itemWidth = VOLUME_BUTTON_WIDTH
+        }
+        if (itemWidth > 0) widths.push(itemWidth)
+      }
+      const lineWidth = (items: number[]) =>
+        items.reduce((sum, itemWidth) => sum + itemWidth, 0) +
+        gap * Math.max(0, items.length - 1)
+      const natural = lineWidth(widths)
+      const withSlider = natural - VOLUME_BUTTON_WIDTH + volumeSliderWidth
+
+      const spare = width - 2 * columnGap
+      const volumeSlider =
+        spare - CENTER_MAX_WIDTH >= 2 * Math.max(SIDE_MIN_WIDTH, withSlider)
+      const wanted = Math.max(
+        SIDE_MIN_WIDTH,
+        volumeSlider ? withSlider : natural,
+      )
+      const room = Math.max(
+        SIDE_MIN_WIDTH,
+        Math.floor((spare - CENTER_MIN_WIDTH) / 2),
+      )
+      const side = Math.min(wanted, room)
+
+      // Not enough room even so: two even lines.
+      let maxWidth = ''
+      if (!volumeSlider && natural > side) {
+        const firstLine = widths.slice(0, Math.ceil(widths.length / 2))
+        const secondLine = widths.slice(firstLine.length)
+        maxWidth = `${Math.ceil(Math.max(lineWidth(firstLine), lineWidth(secondLine))) + 1}px`
+      }
       if (row.style.maxWidth !== maxWidth) row.style.maxWidth = maxWidth
+
+      setLayout((previous) =>
+        previous.side === side && previous.volumeSlider === volumeSlider
+          ? previous
+          : { side, volumeSlider },
+      )
     }
 
     const observer = new ResizeObserver(update)
-    observer.observe(space)
+    observer.observe(grid)
+    observer.observe(row)
     // Buttons come and go (radio, podcasts, Connect, Jam).
     const mutations = new MutationObserver(update)
     mutations.observe(row, { childList: true })
@@ -333,5 +410,7 @@ function useBalancedWrap(ref: RefObject<HTMLDivElement>) {
       observer.disconnect()
       mutations.disconnect()
     }
-  }, [ref])
+  }, [layoutRef, rowRef])
+
+  return layout
 }

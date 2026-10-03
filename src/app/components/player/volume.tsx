@@ -20,12 +20,18 @@ interface PlayerVolumeProps {
   disabled: boolean
   audioRef: RefObject<HTMLAudioElement>
   vertical?: boolean
+  /**
+   * Inline slider (true) or a button with a popover (false), as the player
+   * decides from the room it has. Left out: the slider on 2xl screens.
+   */
+  expanded?: boolean
 }
 
 export function PlayerVolume({
   disabled,
   audioRef,
   vertical,
+  expanded,
 }: PlayerVolumeProps) {
   const { t } = useTranslation()
   const { volume, handleVolumeWheel } = usePlayerVolume()
@@ -46,14 +52,31 @@ export function PlayerVolume({
       : t('player.tooltips.volume.mute')
 
   return (
-    <div className={clsx(disabled && 'opacity-50')}>
-      <div className="flex 2xl:hidden">
+    <div
+      className={clsx(disabled && 'opacity-50')}
+      data-player-volume
+      data-expanded={expanded ?? undefined}
+    >
+      <div
+        className={clsx(
+          expanded === undefined && 'flex 2xl:hidden',
+          expanded === true && 'hidden',
+          expanded === false && 'flex',
+        )}
+      >
         <PopoverVolume vertical={vertical}>
           <VolumeIcon volume={volume} size={18} />
         </PopoverVolume>
       </div>
 
-      <div className="hidden 2xl:flex gap-2 pr-2 items-center">
+      <div
+        className={clsx(
+          'gap-2 pr-2 items-center',
+          expanded === undefined && 'hidden 2xl:flex',
+          expanded === true && 'flex',
+          expanded === false && 'hidden',
+        )}
+      >
         <SimpleTooltip text={tooltipText} disabled={disabled}>
           <div className="h-10 flex items-center">
             <MuteButton disabled={disabled}>
