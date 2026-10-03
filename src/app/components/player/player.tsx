@@ -312,9 +312,10 @@ export function Player() {
 // at least this wide on each side for the track info.
 const CENTER_MAX_WIDTH = 640
 const SIDE_MIN_WIDTH = 250
-// Room the controls keep (transport buttons and a short progress bar)
-// before the buttons on the right wrap instead.
-const CENTER_MIN_WIDTH = 260
+// Before the buttons on the right wrap, the controls give up width down to
+// the transport buttons, or a seekbar this short; the whole until measured.
+const SEEKBAR_MIN_WIDTH = 100
+const CENTER_MIN_WIDTH = 240
 const VOLUME_BUTTON_WIDTH = 40
 // The inline volume slider, measured when it shows.
 let volumeSliderWidth = 172
@@ -371,24 +372,27 @@ function useButtonsLayout(
       const withSlider = natural - VOLUME_BUTTON_WIDTH + volumeSliderWidth
 
       const spare = width - 2 * columnGap
+      const centerMin = measureCenterMinWidth(grid) ?? CENTER_MIN_WIDTH
       const volumeSlider =
         spare - CENTER_MAX_WIDTH >= 2 * Math.max(SIDE_MIN_WIDTH, withSlider)
       const wanted = Math.max(
         SIDE_MIN_WIDTH,
         volumeSlider ? withSlider : natural,
       )
-      const room = Math.max(
-        SIDE_MIN_WIDTH,
-        Math.floor((spare - CENTER_MIN_WIDTH) / 2),
-      )
-      const side = Math.min(wanted, room)
+      const room = Math.max(SIDE_MIN_WIDTH, Math.floor((spare - centerMin) / 2))
+      let side = Math.min(wanted, room)
 
-      // Not enough room even so: two even lines.
+      // Not enough room even so: two even lines, and the column only as
+      // wide as they are, so the seekbar gets the rest.
       let maxWidth = ''
       if (!volumeSlider && natural > side) {
         const firstLine = widths.slice(0, Math.ceil(widths.length / 2))
         const secondLine = widths.slice(firstLine.length)
-        maxWidth = `${Math.ceil(Math.max(lineWidth(firstLine), lineWidth(secondLine))) + 1}px`
+        const wrapped = Math.ceil(
+          Math.max(lineWidth(firstLine), lineWidth(secondLine)) + 1,
+        )
+        maxWidth = `${wrapped}px`
+        side = Math.max(SIDE_MIN_WIDTH, wrapped)
       }
       if (row.style.maxWidth !== maxWidth) row.style.maxWidth = maxWidth
 
@@ -413,4 +417,51 @@ function useButtonsLayout(
   }, [layoutRef, rowRef])
 
   return layout
+}
+
+/**
+ * The narrowest the player's controls go: the transport buttons, or the
+ * seekbar row with the seekbar at its shortest, with the controls' padding.
+ */
+function measureCenterMinWidth(grid: HTMLElement) {
+  const center = grid.children[1] as HTMLElement | undefined
+  if (!center) return null
+  const [transport, seekbarRow] = [...center.children] as HTMLElement[]
+  if (!transport) return null
+
+  const rowWidth = (row: HTMLElement, flexible?: Element) => {
+    const gap = Number.parseFloat(getComputedStyle(row).columnGap) || 0
+    const items = [...row.children].filter(
+      (item) => item.getBoundingClientRect().width > 0 || item === flexible,
+    )
+    return (
+      items.reduce(
+        (sum, item) =>
+          sum +
+          (item === flexible
+            ? SEEKBAR_MIN_WIDTH
+            : item.getBoundingClientRect().width),
+        0,
+      ) +
+      gap * Math.max(0, items.length - 1)
+    )
+  }
+
+  const slider = seekbarRow?.querySelector(
+    '[data-testid=player-progress-slider], .pointer-events-none',
+  )
+  const seekbar =
+    slider && seekbarRow
+      ? [...seekbarRow.children].find((item) => item.contains(slider))
+      : undefined
+  const needed = Math.max(
+    rowWidth(transport),
+    seekbarRow && seekbar ? rowWidth(seekbarRow, seekbar) : 0,
+  )
+  const centerStyle = getComputedStyle(center)
+  return Math.ceil(
+    needed +
+      Number.parseFloat(centerStyle.paddingLeft) +
+      Number.parseFloat(centerStyle.paddingRight),
+  )
 }
