@@ -137,6 +137,18 @@ public class CarBrowseTest {
                 ? controller.get().getQueue().size() : 0));
         assertNotNull(state);
         assertTrue("plays", state.getState() == PlaybackStateCompat.STATE_PLAYING);
+        // Optionally a second pick later (e.g. once the app has been opened),
+        // from another album: "repickAfterSeconds".
+        String repick = InstrumentationRegistry.getArguments().getString("repickAfterSeconds");
+        if (repick != null) {
+            Thread.sleep(Long.parseLong(repick) * 1000);
+            List<MediaBrowserCompat.MediaItem> others = children(albums.get(1).getMediaId());
+            MediaBrowserCompat.MediaItem second = others.get(0);
+            log("picking again", second);
+            InstrumentationRegistry.getInstrumentation().runOnMainSync(() ->
+                controller.get().getTransportControls().playFromMediaId(
+                    second.getMediaId(), null));
+        }
         String wait = InstrumentationRegistry.getArguments().getString("holdSeconds");
         if (wait != null) Thread.sleep(Long.parseLong(wait) * 1000);
     }
