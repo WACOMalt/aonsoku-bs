@@ -576,6 +576,7 @@ final class CarLibrary {
     MediaItem songItem(AonsokuServer server, JSONObject song, String mediaId) {
         Bundle extras = new Bundle();
         extras.putString(EXTRA_SONG, song.toString());
+        extras.putFloat(PlaybackEngine.EXTRA_GAIN, ReplayGain.gainFor(context, song));
         MediaMetadata.Builder metadata = new MediaMetadata.Builder()
             .setTitle(song.optString("title"))
             .setArtist(song.optString("artist"))

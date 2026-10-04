@@ -1,12 +1,14 @@
 package xyz.bsums.aonsoku;
 
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 
 import androidx.annotation.OptIn;
 import androidx.media3.common.AudioAttributes;
 import androidx.media3.common.C;
+import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.datasource.DefaultDataSource;
@@ -57,7 +59,14 @@ final class PlaybackEngine {
         }
     }
 
+    /** An item's linear ReplayGain factor, in its metadata extras. */
+    static final String EXTRA_GAIN = "aonsoku.gain";
+
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static final String PREFS = "aonsoku_player";
+    // The listener's volume (0..1), kept for playback without the web app.
+    private static float volume = 1f;
+    private static SharedPreferences prefs;
     private static Modes webModes = new Modes(false, Player.REPEAT_MODE_OFF, false);
     private static Runnable modesListener;
 
@@ -91,8 +100,37 @@ final class PlaybackEngine {
                 // Streaming with the screen off needs the CPU and Wi-Fi awake.
                 .setWakeMode(C.WAKE_MODE_NETWORK)
                 .build();
+            prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            volume = prefs.getFloat("volume", 1f);
+            // Each song plays at the listener's volume times its ReplayGain.
+            player.addListener(new Player.Listener() {
+                @Override
+                public void onMediaItemTransition(MediaItem item, int reason) {
+                    applyVolume();
+                }
+            });
         }
         return player;
+    }
+
+    /** Sets the listener's volume (0..1), and remembers it. */
+    static void setVolume(float value) {
+        volume = Math.max(0f, Math.min(1f, value));
+        if (prefs != null) prefs.edit().putFloat("volume", volume).apply();
+        applyVolume();
+    }
+
+    /** The listener's volume times the current song's ReplayGain. */
+    static void applyVolume() {
+        if (player == null) return;
+        float gain = 1f;
+        MediaItem item = player.getCurrentMediaItem();
+        if (item != null && item.mediaMetadata.extras != null) {
+            gain = item.mediaMetadata.extras.getFloat(EXTRA_GAIN, 1f);
+        }
+        // The output cannot be boosted above full scale.
+        player.setVolume(Math.max(0f, Math.min(1f, volume * gain)));
+        DebugLog.i(TAG, "volume " + volume + " x gain " + gain);
     }
 
     static ExoPlayer peek() {

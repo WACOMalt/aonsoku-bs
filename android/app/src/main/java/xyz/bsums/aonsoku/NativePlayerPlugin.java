@@ -56,13 +56,11 @@ public class NativePlayerPlugin extends Plugin {
 
     private static final String TAG = "NativePlayer";
     private static final long PROGRESS_INTERVAL_MS = 500;
-    private static final String EXTRA_GAIN = "aonsoku.gain";
 
     private final Handler main = new Handler(Looper.getMainLooper());
 
     private ExoPlayer player;
     private ListenableFuture<MediaController> controller;
-    private float volume = 1f;
     // What the web app last asked for; changes from anywhere else are
     // reported back so its play/pause state follows.
     private boolean requestedPlaying = false;
@@ -82,7 +80,6 @@ public class NativePlayerPlugin extends Plugin {
         public void onMediaItemTransition(@Nullable MediaItem item, int reason) {
             if (item == null) return;
             DebugLog.i(TAG, "transition to " + item.mediaId + " reason " + reason);
-            applyVolume();
             JSObject data = new JSObject();
             data.put("key", item.mediaId);
             data.put("reason", reason);
@@ -200,7 +197,7 @@ public class NativePlayerPlugin extends Plugin {
         long positionMs = Math.max(0, call.getDouble("positionMs", 0.0).longValue());
         boolean playWhenReady = Boolean.TRUE.equals(call.getBoolean("playWhenReady", false));
         boolean repeatOne = Boolean.TRUE.equals(call.getBoolean("repeatOne", false));
-        float newVolume = call.getFloat("volume", volume);
+        Float newVolume = call.getFloat("volume");
 
         main.post(() -> {
             DebugLog.i(TAG, "load " + current.getString("key") + " at " + positionMs
@@ -211,13 +208,13 @@ public class NativePlayerPlugin extends Plugin {
             if (previous != null) items.add(toMediaItem(previous));
             items.add(toMediaItem(current));
             for (JSObject item : upcoming) items.add(toMediaItem(item));
-            volume = newVolume;
             requestedPlaying = playWhenReady;
             p.setRepeatMode(repeatOne ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
             // The web app sends its queue in playing order.
             p.setShuffleModeEnabled(false);
             p.setMediaItems(items, previous != null ? 1 : 0, positionMs);
-            applyVolume();
+            if (newVolume != null) PlaybackEngine.setVolume(newVolume);
+            else PlaybackEngine.applyVolume();
             p.prepare();
             p.setPlayWhenReady(playWhenReady);
             call.resolve();
@@ -325,8 +322,7 @@ public class NativePlayerPlugin extends Plugin {
     public void setVolume(PluginCall call) {
         float newVolume = call.getFloat("volume", 1f);
         main.post(() -> {
-            volume = newVolume;
-            applyVolume();
+            PlaybackEngine.setVolume(newVolume);
             call.resolve();
         });
     }
@@ -468,6 +464,22 @@ public class NativePlayerPlugin extends Plugin {
         call.resolve();
     }
 
+    /**
+     * The listener's ReplayGain settings, for songs the car plays while the
+     * app is closed: { enabled, type: "track" | "album", preAmp,
+     * defaultGain } (dB).
+     */
+    @PluginMethod
+    public void setReplayGain(PluginCall call) {
+        ReplayGain.save(
+            getContext(),
+            Boolean.TRUE.equals(call.getBoolean("enabled", false)),
+            "album".equals(call.getString("type", "track")),
+            call.getFloat("preAmp", 0f),
+            call.getFloat("defaultGain", 0f));
+        call.resolve();
+    }
+
     @PluginMethod
     public void getState(PluginCall call) {
         main.post(() -> call.resolve(progressData()));
@@ -518,7 +530,7 @@ public class NativePlayerPlugin extends Plugin {
 
     private MediaItem toMediaItem(JSObject item) {
         Bundle extras = new Bundle();
-        extras.putFloat(EXTRA_GAIN, (float) item.optDouble("gain", 1.0));
+        extras.putFloat(PlaybackEngine.EXTRA_GAIN, (float) item.optDouble("gain", 1.0));
         // The song's Subsonic JSON, to resume it when the app is closed.
         org.json.JSONObject song = item.optJSONObject("song");
         if (song != null) extras.putString(CarLibrary.EXTRA_SONG, song.toString());
@@ -538,18 +550,6 @@ public class NativePlayerPlugin extends Plugin {
             .setUri(item.getString("url", ""))
             .setMediaMetadata(metadata.build())
             .build();
-    }
-
-    /** The listener's volume times the current track's ReplayGain. */
-    private void applyVolume() {
-        if (player == null) return;
-        float gain = 1f;
-        MediaItem item = player.getCurrentMediaItem();
-        if (item != null && item.mediaMetadata.extras != null) {
-            gain = item.mediaMetadata.extras.getFloat(EXTRA_GAIN, 1f);
-        }
-        // The output cannot be boosted above full scale.
-        player.setVolume(Math.max(0f, Math.min(1f, volume * gain)));
     }
 
     /**

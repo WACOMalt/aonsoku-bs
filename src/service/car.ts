@@ -26,6 +26,11 @@ export function initCar() {
 
   shareServer()
   useAppStore.subscribe(shareServer)
+  shareReplayGain()
+  usePlayerStore.subscribe(
+    (state) => state.settings.replayGain.values,
+    shareReplayGain,
+  )
 
   player.addListener('carQueue', adopt)
 
@@ -65,6 +70,30 @@ function shareServer() {
   lastServer = key
   NativePlayer?.setServer(server).catch((error) => {
     logger.error('[Car] Could not share the server', error)
+  })
+}
+
+let lastReplayGain = ''
+
+/**
+ * Hands the native side the ReplayGain settings when they change, so songs
+ * the car plays while this app is closed are levelled as they are here.
+ */
+function shareReplayGain() {
+  const { enabled, error, type, preAmp, defaultGain } =
+    usePlayerStore.getState().settings.replayGain.values
+  const settings = {
+    // As NativeSongAudio applies it (see makeEntry).
+    enabled: enabled && !error,
+    type: type === 'album' ? ('album' as const) : ('track' as const),
+    preAmp,
+    defaultGain,
+  }
+  const key = JSON.stringify(settings)
+  if (key === lastReplayGain) return
+  lastReplayGain = key
+  NativePlayer?.setReplayGain(settings).catch((error) => {
+    logger.error('[Car] Could not share ReplayGain settings', error)
   })
 }
 

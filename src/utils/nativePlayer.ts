@@ -79,6 +79,13 @@ interface NativePlayerPlugin {
     protocolVersion: string
   }): Promise<void>
   getCarQueue(): Promise<CarQueue | { songs: null }>
+  /** ReplayGain for songs the car plays while the app is closed. */
+  setReplayGain(options: {
+    enabled: boolean
+    type: 'track' | 'album'
+    preAmp: number
+    defaultGain: number
+  }): Promise<void>
   /** For the buttons in the car and the notification. */
   setModes(options: {
     shuffle: boolean

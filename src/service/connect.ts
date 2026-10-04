@@ -44,6 +44,8 @@ class ConnectService {
   private resumePlaying = false
   private _isSyncing = false
   private takingOverUntil = 0
+  // Something was started here before connecting (see takeOver).
+  private claimOnConnect = false
   private passiveHoldTimer: ReturnType<typeof setTimeout> | undefined
   // See JamService: the queue is only sent when it changes.
   private lastSentQueue: ISong[] | null = null
@@ -202,6 +204,21 @@ class ConnectService {
         }
         return
       }
+      if (
+        this.claimOnConnect &&
+        usePlayerStore.getState().songlist.currentSong
+      ) {
+        // Started here (from the car) while connecting: this device plays.
+        this.claimOnConnect = false
+        setDevices(
+          devices.map((device) => ({
+            ...device,
+            isActivePlayer: device.id === socket.id,
+          })),
+        )
+        this.sendClaim()
+        return
+      }
       if (this.awaitingOnline || useConnectStore.getState().onlineChoice) {
         // Still deciding how to take over: stay the one playing here.
         setDevices(
@@ -287,6 +304,7 @@ class ConnectService {
 
   disconnect() {
     this.stopHeartbeat()
+    this.claimOnConnect = false
     this.endPassiveHold()
     if (this.awaitingOnline) clearTimeout(this.awaitingOnline.timer)
     this.awaitingOnline = null
@@ -364,6 +382,14 @@ class ConnectService {
    * device that plays, and this device takes over with it.
    */
   takeOver(change: () => void) {
+    if (!this.socket?.connected) {
+      // Not connected (the app just opened) or reconnecting: play here,
+      // and take over once connected rather than turning into a remote of
+      // whichever device was playing before.
+      this.claimOnConnect = true
+      change()
+      return
+    }
     const passive =
       this.socket?.connected && !useConnectStore.getState().isActivePlayer
     if (!passive) {
@@ -415,7 +441,7 @@ class ConnectService {
    */
   private forwardLocalChange() {
     // Taking over (see takeOver): what changes here is for here.
-    if (Date.now() < this.takingOverUntil) return
+    if (Date.now() < this.takingOverUntil || this.claimOnConnect) return
     const { songlist, playerState } = usePlayerStore.getState()
     const song = songlist.currentSong
     if (!song) return
