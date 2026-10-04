@@ -19,6 +19,8 @@ export interface NativeItem {
   durationMs: number
   /** Linear ReplayGain factor. */
   gain: number
+  /** The song, which the native side keeps to resume it (see QueueMemory). */
+  song?: ISong
 }
 
 export interface NativeProgress {
@@ -34,8 +36,12 @@ export interface NativeProgress {
  * this app adopts it as its queue (see service/car.ts).
  */
 export interface CarQueue {
+  /** In playing order. */
   songs: ISong[]
   index: number
+  /** In their own order, when the car shuffled them. */
+  original?: ISong[]
+  repeat: 'off' | 'all' | 'one'
   /** The native player's key for the current song. */
   key: string
   positionMs: number
@@ -73,6 +79,12 @@ interface NativePlayerPlugin {
     protocolVersion: string
   }): Promise<void>
   getCarQueue(): Promise<CarQueue | { songs: null }>
+  /** For the buttons in the car and the notification. */
+  setModes(options: {
+    shuffle: boolean
+    repeat: 'off' | 'all' | 'one'
+    starred: boolean
+  }): Promise<void>
   adoptCarQueue(): Promise<void>
 
   addListener(
@@ -97,7 +109,14 @@ interface NativePlayerPlugin {
   ): Promise<PluginListenerHandle>
   addListener(
     event: 'command',
-    callback: (data: { action: 'nexttrack' | 'previoustrack' }) => void,
+    callback: (data: {
+      action:
+        | 'nexttrack'
+        | 'previoustrack'
+        | 'toggleshuffle'
+        | 'togglerepeat'
+        | 'togglestar'
+    }) => void,
   ): Promise<PluginListenerHandle>
   addListener(
     event: 'carQueue',

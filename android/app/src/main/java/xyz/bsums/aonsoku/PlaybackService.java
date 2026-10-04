@@ -2,6 +2,7 @@ package xyz.bsums.aonsoku;
 
 import android.app.PendingIntent;
 import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -14,14 +15,20 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
 import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.session.CommandButton;
 import androidx.media3.session.DefaultMediaNotificationProvider;
 import androidx.media3.session.LibraryResult;
 import androidx.media3.session.MediaConstants;
 import androidx.media3.session.MediaLibraryService;
 import androidx.media3.session.MediaSession;
+import androidx.media3.session.SessionCommand;
+import androidx.media3.session.SessionCommands;
 import androidx.media3.session.SessionError;
+import androidx.media3.session.SessionResult;
 
 import com.google.common.collect.ImmutableList;
+
+import org.json.JSONObject;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
@@ -29,7 +36,9 @@ import com.google.common.util.concurrent.MoreExecutors;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executors;
 
 /**
@@ -49,9 +58,42 @@ public class PlaybackService extends MediaLibraryService {
 
     private static final String TAG = "NativePlayer";
 
+    // The buttons beside play/pause in the car and the notification.
+    private static final SessionCommand FAVORITE =
+        new SessionCommand("xyz.bsums.aonsoku.FAVORITE", Bundle.EMPTY);
+    private static final SessionCommand SHUFFLE =
+        new SessionCommand("xyz.bsums.aonsoku.SHUFFLE", Bundle.EMPTY);
+    private static final SessionCommand REPEAT =
+        new SessionCommand("xyz.bsums.aonsoku.REPEAT", Bundle.EMPTY);
+
     private MediaLibrarySession session;
+    private ExoPlayer player;
     private CarLibrary library;
     private CarScrobbler scrobbler;
+    private QueueMemory memory;
+    // Favourites changed from the car while it plays its own queue, by song.
+    private final Map<String, Boolean> starred = new HashMap<>();
+    private final Player.Listener buttonUpdater = new Player.Listener() {
+        @Override
+        public void onEvents(@NonNull Player player, @NonNull Player.Events events) {
+            if (showingLastQueue && events.contains(Player.EVENT_PLAY_WHEN_READY_CHANGED)
+                && player.getPlayWhenReady()) {
+                // Played from the car: the car's queue now.
+                showingLastQueue = false;
+                if (!PlaybackEngine.hasWebApp()) PlaybackEngine.startCarQueue();
+            }
+            if (events.contains(Player.EVENT_TIMELINE_CHANGED)
+                && player.getMediaItemCount() == 0) {
+                showingLastQueue = false;
+            }
+            if (events.containsAny(
+                Player.EVENT_MEDIA_ITEM_TRANSITION,
+                Player.EVENT_SHUFFLE_MODE_ENABLED_CHANGED,
+                Player.EVENT_REPEAT_MODE_CHANGED)) {
+                updateButtons();
+            }
+        }
+    };
     private final ListeningExecutorService network =
         MoreExecutors.listeningDecorator(Executors.newFixedThreadPool(3));
 
@@ -60,9 +102,12 @@ public class PlaybackService extends MediaLibraryService {
     public void onCreate() {
         super.onCreate();
 
-        ExoPlayer player = PlaybackEngine.get(this);
+        player = PlaybackEngine.get(this);
         library = new CarLibrary(this);
         scrobbler = new CarScrobbler(this, player, network);
+        memory = new QueueMemory(this, player, network);
+        player.addListener(buttonUpdater);
+        PlaybackEngine.setModesListener(this::updateButtons);
 
         DefaultMediaNotificationProvider notifications =
             new DefaultMediaNotificationProvider.Builder(this).build();
@@ -73,6 +118,7 @@ public class PlaybackService extends MediaLibraryService {
             new MediaLibrarySession.Builder(this, new QueuePlayer(player), new LibraryCallback());
         PendingIntent launch = launchIntent();
         if (launch != null) builder.setSessionActivity(launch);
+        builder.setMediaButtonPreferences(buttons());
         session = builder.build();
         // Signing in or out on the phone shows in the car at once.
         AonsokuServer.setChangeListener(this::refreshLibrary);
@@ -85,8 +131,8 @@ public class PlaybackService extends MediaLibraryService {
         DebugLog.i(TAG, "library refreshed");
         session.clearReplicatedLibraryError();
         for (String id : new String[] {
-            CarLibrary.ROOT, CarLibrary.HOME, CarLibrary.ARTISTS, CarLibrary.PLAYLISTS,
-            CarLibrary.FAVORITES,
+            CarLibrary.ROOT, CarLibrary.HOME, CarLibrary.ALBUMS, CarLibrary.ARTISTS,
+            CarLibrary.PLAYLISTS, CarLibrary.FAVORITES,
         }) {
             session.notifyChildrenChanged(id, Integer.MAX_VALUE, null);
         }
@@ -115,6 +161,12 @@ public class PlaybackService extends MediaLibraryService {
     public void onDestroy() {
         DebugLog.i(TAG, "media session closed");
         AonsokuServer.setChangeListener(null);
+        PlaybackEngine.setModesListener(null);
+        if (player != null) player.removeListener(buttonUpdater);
+        if (memory != null) {
+            memory.release();
+            memory = null;
+        }
         if (scrobbler != null) {
             scrobbler.release();
             scrobbler = null;
@@ -127,6 +179,146 @@ public class PlaybackService extends MediaLibraryService {
         super.onDestroy();
     }
 
+    /**
+     * Whether the buttons act on the player itself: for a car queue, or with
+     * no web app running. Otherwise the web app, which owns the queue, does.
+     */
+    private boolean playerOwnsQueue() {
+        return PlaybackEngine.isCarQueue() || !PlaybackEngine.hasWebApp();
+    }
+
+    /** Favourite, shuffle and repeat, showing their state. */
+    private List<CommandButton> buttons() {
+        boolean own = player == null || playerOwnsQueue();
+        PlaybackEngine.Modes web = PlaybackEngine.webModes();
+        boolean shuffle = own ? player != null && player.getShuffleModeEnabled() : web.shuffle;
+        int repeat = own ? (player != null ? player.getRepeatMode() : Player.REPEAT_MODE_OFF)
+            : web.repeat;
+        boolean favorite = own ? isStarred() : web.starred;
+
+        List<CommandButton> buttons = new ArrayList<>();
+        buttons.add(new CommandButton.Builder(
+                favorite ? CommandButton.ICON_HEART_FILLED : CommandButton.ICON_HEART_UNFILLED)
+            .setDisplayName(favorite ? "Remove from favorites" : "Add to favorites")
+            .setSessionCommand(FAVORITE)
+            .setSlots(CommandButton.SLOT_OVERFLOW)
+            .build());
+        buttons.add(new CommandButton.Builder(
+                shuffle ? CommandButton.ICON_SHUFFLE_ON : CommandButton.ICON_SHUFFLE_OFF)
+            .setDisplayName(shuffle ? "Shuffle off" : "Shuffle")
+            .setSessionCommand(SHUFFLE)
+            .setSlots(CommandButton.SLOT_OVERFLOW)
+            .build());
+        int icon = repeat == Player.REPEAT_MODE_ONE ? CommandButton.ICON_REPEAT_ONE
+            : repeat == Player.REPEAT_MODE_ALL ? CommandButton.ICON_REPEAT_ALL
+            : CommandButton.ICON_REPEAT_OFF;
+        buttons.add(new CommandButton.Builder(icon)
+            .setDisplayName(repeat == Player.REPEAT_MODE_ONE ? "Repeat one"
+                : repeat == Player.REPEAT_MODE_ALL ? "Repeat all" : "Repeat off")
+            .setSessionCommand(REPEAT)
+            .setSlots(CommandButton.SLOT_OVERFLOW)
+            .build());
+        return buttons;
+    }
+
+    private void updateButtons() {
+        if (session != null) session.setMediaButtonPreferences(buttons());
+    }
+
+    /** Whether the current song is a favourite (car queue). */
+    private boolean isStarred() {
+        if (player == null) return false;
+        MediaItem item = player.getCurrentMediaItem();
+        if (item == null) return false;
+        String songId = CarLibrary.songIdOf(item);
+        if (songId != null && starred.containsKey(songId)) {
+            return Boolean.TRUE.equals(starred.get(songId));
+        }
+        String song = QueueMemory.songOf(item);
+        if (song == null) return false;
+        try {
+            return new JSONObject(song).has("starred");
+        } catch (org.json.JSONException e) {
+            return false;
+        }
+    }
+
+    /** Favourites the current song, or stops (car queue). */
+    private void toggleStarred() {
+        MediaItem item = player.getCurrentMediaItem();
+        String songId = item != null ? CarLibrary.songIdOf(item) : null;
+        if (songId == null) return;
+        boolean star = !isStarred();
+        starred.put(songId, star);
+        updateButtons();
+        network.execute(() -> {
+            AonsokuServer server = AonsokuServer.load(this);
+            if (server == null) return;
+            try {
+                server.call(star ? "star" : "unstar", AonsokuServer.map("id", songId));
+            } catch (IOException e) {
+                Log.w(TAG, "Could not change the favourite", e);
+            }
+        });
+    }
+
+    // The last queue, loaded paused for the car to show (see showLastQueue).
+    private boolean showingLastQueue;
+
+    /**
+     * A car (or the system's controls) connected with nothing loaded and the
+     * app closed: load the last queue, paused, so the car shows it and play
+     * picks up where it left off. Once it plays it is a car queue; the web
+     * app, if it starts first, loads its own queue over it.
+     */
+    private void showLastQueue() {
+        if (player == null || player.getMediaItemCount() > 0 || PlaybackEngine.hasWebApp()) {
+            return;
+        }
+        network.execute(() -> {
+            QueueMemory.Saved saved = QueueMemory.load(this);
+            AonsokuServer server = AonsokuServer.load(this);
+            if (saved == null || server == null) return;
+            List<MediaItem> items = new ArrayList<>();
+            for (JSONObject song : saved.songs) {
+                items.add(library.songItem(server, song, resumeId(song)));
+            }
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                if (player == null || player.getMediaItemCount() > 0
+                    || PlaybackEngine.hasWebApp()) {
+                    return;
+                }
+                DebugLog.i(TAG, "showing the last queue, " + items.size() + " songs");
+                // Saved in playing order: shuffled already, if it was.
+                player.setShuffleModeEnabled(false);
+                player.setRepeatMode(saved.repeat);
+                player.setMediaItems(items, saved.index, saved.positionMs);
+                player.setPlayWhenReady(false);
+                // Prepared (paused) so the car shows it as ready to play.
+                player.prepare();
+                showingLastQueue = true;
+            });
+        });
+    }
+
+    /** Shuffles the rest of the queue after the current song, or stops. */
+    private void toggleShuffle() {
+        if (player.getShuffleModeEnabled()) {
+            player.setShuffleModeEnabled(false);
+        } else {
+            PlaybackEngine.shuffleFromCurrent(player);
+            player.setShuffleModeEnabled(true);
+        }
+    }
+
+    private void cycleRepeat() {
+        int repeat = player.getRepeatMode();
+        // As the app cycles: off, all, one.
+        player.setRepeatMode(repeat == Player.REPEAT_MODE_OFF ? Player.REPEAT_MODE_ALL
+            : repeat == Player.REPEAT_MODE_ALL ? Player.REPEAT_MODE_ONE
+            : Player.REPEAT_MODE_OFF);
+    }
+
     @Nullable
     private PendingIntent launchIntent() {
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
@@ -135,8 +327,116 @@ public class PlaybackService extends MediaLibraryService {
             this, 0, launch, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
-    /** Android Auto's browsing, search and picks. */
+    /** Android Auto's browsing, search and picks, and the buttons. */
     private final class LibraryCallback implements MediaLibrarySession.Callback {
+
+        @NonNull
+        @Override
+        public ListenableFuture<MediaSession.ConnectionResult> onConnectAsync(
+            @NonNull MediaSession session, @NonNull MediaSession.ControllerInfo controller
+        ) {
+            MediaSession.ConnectionResult defaults =
+                new MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
+                    .build();
+            if (isExternal(controller)) {
+                PlaybackEngine.externalControllerConnected();
+                showLastQueue();
+            }
+            SessionCommands commands = defaults.availableSessionCommands.buildUpon()
+                .add(FAVORITE)
+                .add(SHUFFLE)
+                .add(REPEAT)
+                .build();
+            return Futures.immediateFuture(
+                new MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
+                    .setAvailableSessionCommands(commands)
+                    .setMediaButtonPreferences(buttons())
+                    .build());
+        }
+
+        @Override
+        public void onDisconnected(
+            @NonNull MediaSession session, @NonNull MediaSession.ControllerInfo controller
+        ) {
+            if (!isExternal(controller)) return;
+            PlaybackEngine.externalControllerDisconnected();
+            // Kept for the car (see NativePlayerPlugin.closeSession); with
+            // the car gone and nothing to play, it can go.
+            if (!PlaybackEngine.hasExternalControllers()
+                && (player == null || player.getMediaItemCount() == 0)) {
+                stopSelf();
+            }
+        }
+
+        @NonNull
+        @Override
+        public ListenableFuture<SessionResult> onCustomCommand(
+            @NonNull MediaSession session,
+            @NonNull MediaSession.ControllerInfo controller,
+            @NonNull SessionCommand command,
+            @NonNull Bundle args
+        ) {
+            boolean own = playerOwnsQueue();
+            switch (command.customAction) {
+                case "xyz.bsums.aonsoku.FAVORITE":
+                    if (own) toggleStarred(); else PlaybackEngine.sendCommand("togglestar");
+                    break;
+                case "xyz.bsums.aonsoku.SHUFFLE":
+                    if (own) {
+                        toggleShuffle();
+                    } else {
+                        PlaybackEngine.sendCommand("toggleshuffle");
+                    }
+                    break;
+                case "xyz.bsums.aonsoku.REPEAT":
+                    if (own) cycleRepeat(); else PlaybackEngine.sendCommand("togglerepeat");
+                    break;
+                default:
+                    return Futures.immediateFuture(
+                        new SessionResult(SessionError.ERROR_NOT_SUPPORTED));
+            }
+            return Futures.immediateFuture(new SessionResult(SessionResult.RESULT_SUCCESS));
+        }
+
+        /**
+         * Play with nothing loaded (the car connecting, a headset's play
+         * button, the system's media controls): resume what played last.
+         */
+        @NonNull
+        @Override
+        public ListenableFuture<MediaSession.MediaItemsWithStartPosition> onPlaybackResumption(
+            @NonNull MediaSession mediaSession,
+            @NonNull MediaSession.ControllerInfo controller,
+            boolean isForPlayback
+        ) {
+            return network.submit(() -> {
+                QueueMemory.Saved saved = QueueMemory.load(PlaybackService.this);
+                AonsokuServer server = AonsokuServer.load(PlaybackService.this);
+                if (saved == null || server == null) throw new IOException("Nothing to resume");
+                if (!isForPlayback) {
+                    // Only shown (by the system), not played: the one song.
+                    JSONObject song = saved.songs.get(saved.index);
+                    return new MediaSession.MediaItemsWithStartPosition(
+                        java.util.Collections.singletonList(library.songItem(
+                            server, song, resumeId(song))),
+                        0, saved.positionMs);
+                }
+                List<MediaItem> items = new ArrayList<>();
+                for (JSONObject song : saved.songs) {
+                    items.add(library.songItem(server, song, resumeId(song)));
+                }
+                DebugLog.i(TAG, "resuming " + items.size() + " songs at " + saved.index);
+                int repeat = saved.repeat;
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                    if (player == null) return;
+                    // Saved in playing order: shuffled already, if it was.
+                    player.setShuffleModeEnabled(false);
+                    player.setRepeatMode(repeat);
+                });
+                return new MediaSession.MediaItemsWithStartPosition(
+                    items, saved.index, saved.positionMs);
+            });
+        }
 
         @NonNull
         @Override
@@ -289,6 +589,14 @@ public class PlaybackService extends MediaLibraryService {
         }
     }
 
+    private boolean isExternal(MediaSession.ControllerInfo controller) {
+        return !getPackageName().equals(controller.getPackageName());
+    }
+
+    private static String resumeId(JSONObject song) {
+        return "song/" + Uri.encode(song.optString("id")) + "/one";
+    }
+
     /** Signed out, or the server refused the sign-in: say so in the car. */
     private <V> LibraryResult<V> error(IOException e, @Nullable LibraryParams params) {
         boolean signIn = e instanceof CarLibrary.SignedOutException
@@ -351,12 +659,16 @@ public class PlaybackService extends MediaLibraryService {
             // First, so the change it makes is already the car's.
             PlaybackEngine.startCarQueue();
             super.setMediaItems(mediaItems);
+            // Shuffled, the pick still plays first.
+            if (getShuffleModeEnabled()) PlaybackEngine.shuffleFromCurrent(PlaybackEngine.peek());
         }
 
         @Override
         public void setMediaItems(@NonNull List<MediaItem> mediaItems, boolean resetPosition) {
             PlaybackEngine.startCarQueue();
             super.setMediaItems(mediaItems, resetPosition);
+            // Shuffled, the pick still plays first.
+            if (getShuffleModeEnabled()) PlaybackEngine.shuffleFromCurrent(PlaybackEngine.peek());
         }
 
         @Override
@@ -365,6 +677,8 @@ public class PlaybackService extends MediaLibraryService {
         ) {
             PlaybackEngine.startCarQueue();
             super.setMediaItems(mediaItems, startIndex, startPositionMs);
+            // Shuffled, the pick still plays first.
+            if (getShuffleModeEnabled()) PlaybackEngine.shuffleFromCurrent(PlaybackEngine.peek());
         }
 
         @Override

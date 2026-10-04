@@ -154,6 +154,7 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
           : '',
         durationMs: (track.duration ?? 0) * 1000,
         gain: Number.isFinite(gain) && gain > 0 ? gain : 1,
+        song: track,
       }
       return { key, songId: track.id, item }
     },
@@ -282,9 +283,14 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
         setPlayingState(false)
       }),
 
+      // From the notification, a headset, or the buttons in the car.
       NativePlayer.addListener('command', ({ action }) => {
+        const { actions } = usePlayerStore.getState()
         if (action === 'nexttrack') playNextSong()
         if (action === 'previoustrack') playPrevSong()
+        if (action === 'toggleshuffle') actions.toggleShuffle()
+        if (action === 'togglerepeat') actions.toggleLoop()
+        if (action === 'togglestar') actions.starCurrentSong()
       }),
     ]
     return () => {
@@ -433,6 +439,24 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
   useEffect(() => {
     NativePlayer?.setRepeatOne({ enabled: loopState === LoopState.One })
   }, [loopState])
+
+  // The state the buttons in the car and the notification show.
+  const isShuffleActive = usePlayerStore(
+    (state) => state.playerState.isShuffleActive,
+  )
+  const starred = typeof song?.starred === 'string'
+  useEffect(() => {
+    NativePlayer?.setModes({
+      shuffle: isShuffleActive,
+      repeat:
+        loopState === LoopState.One
+          ? 'one'
+          : loopState === LoopState.All
+            ? 'all'
+            : 'off',
+      starred,
+    })
+  }, [isShuffleActive, loopState, starred])
 
   return null
 }

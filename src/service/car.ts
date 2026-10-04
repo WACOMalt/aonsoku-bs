@@ -12,6 +12,7 @@ import { useAppStore } from '@/store/app.store'
 import { useCarStore } from '@/store/car.store'
 import { idbStorage } from '@/store/idb'
 import { usePlayerStore } from '@/store/player.store'
+import { LoopState } from '@/types/playerContext'
 import { AuthType } from '@/types/serverConfig'
 import { logger } from '@/utils/logger'
 import { type CarQueue, NativePlayer } from '@/utils/nativePlayer'
@@ -86,6 +87,21 @@ function adopt(queue: CarQueue) {
   connectService.takeOver(() => {
     const { actions } = usePlayerStore.getState()
     actions.setSongList(queue.songs, queue.index)
+    // Shuffled and repeating as the car had it.
+    const { original } = queue
+    usePlayerStore.setState((state) => {
+      if (original) {
+        state.songlist.originalList = original
+        state.songlist.shuffledList = queue.songs
+        state.playerState.isShuffleActive = true
+      }
+      state.playerState.loopState =
+        queue.repeat === 'one'
+          ? LoopState.One
+          : queue.repeat === 'all'
+            ? LoopState.All
+            : LoopState.Off
+    })
     actions.setProgress(Math.floor(queue.positionMs / 1000))
     actions.setPlayingState(queue.playing)
   })

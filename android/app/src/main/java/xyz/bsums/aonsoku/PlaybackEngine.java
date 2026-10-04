@@ -38,7 +38,28 @@ final class PlaybackEngine {
         void onCarQueue();
     }
 
+    /**
+     * Shuffle, repeat and the current song's favourite as the web app has
+     * them, for the buttons in the car and the notification (see
+     * PlaybackService). Not used for a car queue, which the player itself
+     * shuffles and repeats.
+     */
+    static final class Modes {
+        final boolean shuffle;
+        /** Player.REPEAT_MODE_OFF, _ONE or _ALL. */
+        final int repeat;
+        final boolean starred;
+
+        Modes(boolean shuffle, int repeat, boolean starred) {
+            this.shuffle = shuffle;
+            this.repeat = repeat;
+            this.starred = starred;
+        }
+    }
+
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static Modes webModes = new Modes(false, Player.REPEAT_MODE_OFF, false);
+    private static Runnable modesListener;
 
     private static ExoPlayer player;
     private static CommandListener commandListener;
@@ -93,6 +114,48 @@ final class PlaybackEngine {
         carQueueListener = listener;
     }
 
+    // Controllers from other apps (Android Auto, the system's media
+    // controls), connected to PlaybackService.
+    private static int externalControllers;
+
+    static void externalControllerConnected() {
+        externalControllers++;
+    }
+
+    static void externalControllerDisconnected() {
+        externalControllers = Math.max(0, externalControllers - 1);
+    }
+
+    static boolean hasExternalControllers() {
+        return externalControllers > 0;
+    }
+
+    /**
+     * A shuffled order with the current song first and the rest random, as
+     * the app shuffles (ExoPlayer's own order can put it anywhere).
+     */
+    @OptIn(markerClass = UnstableApi.class)
+    static void shuffleFromCurrent(ExoPlayer player) {
+        if (player == null) return;
+        int count = player.getMediaItemCount();
+        int current = player.getCurrentMediaItemIndex();
+        if (count == 0 || current < 0 || current >= count) return;
+        java.util.List<Integer> rest = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) if (i != current) rest.add(i);
+        java.util.Collections.shuffle(rest);
+        int[] order = new int[count];
+        order[0] = current;
+        for (int i = 0; i < rest.size(); i++) order[i + 1] = rest.get(i);
+        player.setShuffleOrder(
+            new androidx.media3.exoplayer.source.ShuffleOrder.DefaultShuffleOrder(
+                order, System.nanoTime()));
+    }
+
+    /** Whether the web app is running to take commands. */
+    static boolean hasWebApp() {
+        return commandListener != null;
+    }
+
     static boolean isCarQueue() {
         return carQueue;
     }
@@ -104,13 +167,35 @@ final class PlaybackEngine {
     static void startCarQueue() {
         DebugLog.i(TAG, "car queue started");
         carQueue = true;
+        modesChanged();
         CarQueueListener listener = carQueueListener;
         if (listener != null) MAIN.post(listener::onCarQueue);
     }
 
     /** The web app took the player over: its queue again, not the car's. */
     static void endCarQueue() {
+        if (!carQueue) return;
         carQueue = false;
+        modesChanged();
+    }
+
+    static Modes webModes() {
+        return webModes;
+    }
+
+    static void setWebModes(Modes modes) {
+        webModes = modes;
+        modesChanged();
+    }
+
+    /** Told (on the main thread) when the buttons' state may have changed. */
+    static void setModesListener(Runnable listener) {
+        modesListener = listener;
+    }
+
+    static void modesChanged() {
+        Runnable listener = modesListener;
+        if (listener != null) MAIN.post(listener);
     }
 
     static void sendCommand(String action) {
@@ -125,9 +210,10 @@ final class PlaybackEngine {
      */
     static void skipToNext(Player player) {
         DebugLog.i(TAG, "next pressed");
-        int index = player.getCurrentMediaItemIndex();
-        if (index + 1 < player.getMediaItemCount()) {
-            player.seekTo(index + 1, 0);
+        // In order, or shuffled and repeating for a car queue.
+        int next = player.getNextMediaItemIndex();
+        if (next != C.INDEX_UNSET) {
+            player.seekTo(next, 0);
             if (player.getPlaybackState() == Player.STATE_IDLE) player.prepare();
         } else if (!carQueue) {
             // A car queue is held whole: past its end there is nothing.
@@ -138,9 +224,9 @@ final class PlaybackEngine {
     /** Previous, handled the same way as next. */
     static void skipToPrevious(Player player) {
         DebugLog.i(TAG, "previous pressed");
-        int index = player.getCurrentMediaItemIndex();
-        if (index >= 1) {
-            player.seekTo(index - 1, 0);
+        int previous = player.getPreviousMediaItemIndex();
+        if (previous != C.INDEX_UNSET) {
+            player.seekTo(previous, 0);
             if (player.getPlaybackState() == Player.STATE_IDLE) player.prepare();
         } else if (!carQueue) {
             sendCommand("previoustrack");

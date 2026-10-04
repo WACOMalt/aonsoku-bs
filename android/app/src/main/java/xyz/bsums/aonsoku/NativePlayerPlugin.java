@@ -16,6 +16,7 @@ import androidx.media3.common.MediaItem;
 import androidx.media3.common.MediaMetadata;
 import androidx.media3.common.PlaybackException;
 import androidx.media3.common.Player;
+import androidx.media3.common.Timeline;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.session.MediaController;
 import androidx.media3.session.SessionToken;
@@ -213,6 +214,8 @@ public class NativePlayerPlugin extends Plugin {
             volume = newVolume;
             requestedPlaying = playWhenReady;
             p.setRepeatMode(repeatOne ? Player.REPEAT_MODE_ONE : Player.REPEAT_MODE_OFF);
+            // The web app sends its queue in playing order.
+            p.setShuffleModeEnabled(false);
             p.setMediaItems(items, previous != null ? 1 : 0, positionMs);
             applyVolume();
             p.prepare();
@@ -347,9 +350,15 @@ public class NativePlayerPlugin extends Plugin {
     @PluginMethod
     public void stop(PluginCall call) {
         main.post(() -> {
+            // A list the car started is the car's to stop; the web app has
+            // not taken it over (it would have adopted it first).
+            if (PlaybackEngine.isCarQueue()) {
+                DebugLog.i(TAG, "stop ignored: the car's queue");
+                call.resolve();
+                return;
+            }
             DebugLog.i(TAG, "stop");
             requestedPlaying = false;
-            PlaybackEngine.endCarQueue();
             main.removeCallbacks(progressTick);
             if (player != null) {
                 player.stop();
@@ -423,6 +432,12 @@ public class NativePlayerPlugin extends Plugin {
             DebugLog.i(TAG, "car queue adopted");
             ExoPlayer p = ensurePlayer();
             PlaybackEngine.endCarQueue();
+            // The web app's queue is in playing order and repeats itself,
+            // except for repeat-one.
+            p.setShuffleModeEnabled(false);
+            if (p.getRepeatMode() == Player.REPEAT_MODE_ALL) {
+                p.setRepeatMode(Player.REPEAT_MODE_OFF);
+            }
             requestedPlaying = p.getPlayWhenReady();
             updateAwake();
             emitProgress();
@@ -432,6 +447,25 @@ public class NativePlayerPlugin extends Plugin {
             }
             call.resolve();
         });
+    }
+
+    /**
+     * Shuffle, repeat and whether the current song is a favourite, as the
+     * web app has them, for the buttons in the car and the notification:
+     * { shuffle, repeat: "off" | "all" | "one", starred }.
+     */
+    @PluginMethod
+    public void setModes(PluginCall call) {
+        boolean shuffle = Boolean.TRUE.equals(call.getBoolean("shuffle", false));
+        String repeat = call.getString("repeat", "off");
+        boolean starred = Boolean.TRUE.equals(call.getBoolean("starred", false));
+        PlaybackEngine.setWebModes(new PlaybackEngine.Modes(
+            shuffle,
+            "one".equals(repeat) ? Player.REPEAT_MODE_ONE
+                : "all".equals(repeat) ? Player.REPEAT_MODE_ALL
+                : Player.REPEAT_MODE_OFF,
+            starred));
+        call.resolve();
     }
 
     @PluginMethod
@@ -460,6 +494,9 @@ public class NativePlayerPlugin extends Plugin {
         if (controller == null) return;
         MediaController.releaseFuture(controller);
         controller = null;
+        // Android Auto browses through the service: it stays while the car
+        // is connected (see PlaybackService.onDisconnected).
+        if (PlaybackEngine.hasExternalControllers()) return;
         Context context = getContext();
         context.stopService(new Intent(context, PlaybackService.class));
     }
@@ -482,6 +519,9 @@ public class NativePlayerPlugin extends Plugin {
     private MediaItem toMediaItem(JSObject item) {
         Bundle extras = new Bundle();
         extras.putFloat(EXTRA_GAIN, (float) item.optDouble("gain", 1.0));
+        // The song's Subsonic JSON, to resume it when the app is closed.
+        org.json.JSONObject song = item.optJSONObject("song");
+        if (song != null) extras.putString(CarLibrary.EXTRA_SONG, song.toString());
 
         MediaMetadata.Builder metadata = new MediaMetadata.Builder()
             .setTitle(item.getString("title", ""))
@@ -532,35 +572,58 @@ public class NativePlayerPlugin extends Plugin {
         return item == null ? "" : item.mediaId;
     }
 
-    /** The car queue the player holds, or null (see getCarQueue). */
+    /**
+     * The car queue the player holds, or null (see getCarQueue): its songs
+     * in playing order and, when shuffled, in their own order too.
+     */
     @Nullable
     private JSObject carQueueData() {
         ExoPlayer p = PlaybackEngine.peek();
         if (p == null || !PlaybackEngine.isCarQueue() || p.getMediaItemCount() == 0) return null;
+        boolean shuffle = p.getShuffleModeEnabled();
+        Timeline timeline = p.getCurrentTimeline();
+        int current = p.getCurrentMediaItemIndex();
         JSArray songs = new JSArray();
         int index = 0;
-        int current = p.getCurrentMediaItemIndex();
-        for (int i = 0; i < p.getMediaItemCount(); i++) {
-            MediaItem item = p.getMediaItemAt(i);
-            Bundle extras = item.mediaMetadata.extras;
-            String song = extras != null ? extras.getString(CarLibrary.EXTRA_SONG) : null;
+        for (int at = timeline.getFirstWindowIndex(shuffle); at != C.INDEX_UNSET;
+             at = timeline.getNextWindowIndex(at, Player.REPEAT_MODE_OFF, shuffle)) {
+            org.json.JSONObject song = songOf(p.getMediaItemAt(at));
             if (song == null) continue;
-            try {
-                if (i == current) index = songs.length();
-                songs.put(new org.json.JSONObject(song));
-            } catch (org.json.JSONException e) {
-                Log.w(TAG, "Skipping a malformed car queue item", e);
-            }
+            if (at == current) index = songs.length();
+            songs.put(song);
         }
         if (songs.length() == 0) return null;
-        MediaItem currentItem = p.getCurrentMediaItem();
         JSObject data = new JSObject();
         data.put("songs", songs);
         data.put("index", index);
+        if (shuffle) {
+            JSArray original = new JSArray();
+            for (int at = 0; at < p.getMediaItemCount(); at++) {
+                org.json.JSONObject song = songOf(p.getMediaItemAt(at));
+                if (song != null) original.put(song);
+            }
+            data.put("original", original);
+        }
+        int repeat = p.getRepeatMode();
+        data.put("repeat", repeat == Player.REPEAT_MODE_ONE ? "one"
+            : repeat == Player.REPEAT_MODE_ALL ? "all" : "off");
+        MediaItem currentItem = p.getCurrentMediaItem();
         data.put("key", currentItem != null ? currentItem.mediaId : "");
         data.put("positionMs", p.getCurrentPosition());
         data.put("playing", p.getPlayWhenReady());
         return data;
+    }
+
+    @Nullable
+    private static org.json.JSONObject songOf(MediaItem item) {
+        String song = QueueMemory.songOf(item);
+        if (song == null) return null;
+        try {
+            return new org.json.JSONObject(song);
+        } catch (org.json.JSONException e) {
+            Log.w(TAG, "Skipping a malformed car queue item", e);
+            return null;
+        }
     }
 
     private JSObject progressData() {

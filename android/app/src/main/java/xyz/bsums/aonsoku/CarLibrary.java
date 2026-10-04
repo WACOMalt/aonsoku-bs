@@ -23,12 +23,14 @@ import java.util.Locale;
  * What Android Auto shows: a few tabs of the library, read from the server
  * (see AonsokuServer), and the songs a pick in the car plays.
  *
- * Kept simple for driving: Home (album lists and a shuffle), Artists,
- * Playlists and Favorites, each at most a level or two deep, and search.
+ * Kept simple for driving: Home (a shuffle, album lists and favourites),
+ * Albums, Artists and Playlists, each at most a level or two deep, and
+ * search.
  *
  * Media IDs:
- *   root, home, artists, playlists, favorites   the tabs
+ *   root, home, albums, artists, playlists      the tabs
  *   albums/<type>                               an album list (recent, newest...)
+ *   favorites                                   favourite songs
  *   shuffle                                     random songs, playable
  *   artist/<id>, album/<id>, playlist/<id>      browsable
  *   song/<id>/<context>                         a song, played in its context:
@@ -41,6 +43,7 @@ final class CarLibrary {
 
     static final String ROOT = "root";
     static final String HOME = "home";
+    static final String ALBUMS = "albums";
     static final String ARTISTS = "artists";
     static final String PLAYLISTS = "playlists";
     static final String FAVORITES = "favorites";
@@ -51,15 +54,19 @@ final class CarLibrary {
 
     // Search results and long lists are cut short: they are read while driving.
     private static final int LIST_LIMIT = 100;
+    // All albums, A to Z (the car offers a letter index); the server sends
+    // at most 500 at a time.
+    private static final int ALL_ALBUMS_LIMIT = 1500;
+    private static final int ALBUM_PAGE = 500;
     private static final int SHUFFLE_SIZE = 100;
     private static final int ARTWORK_SIZE = 512;
 
     private static final String[][] ALBUM_LISTS = {
-        { "recent", "Recently played" },
-        { "newest", "Recently added" },
-        { "frequent", "Most played" },
-        { "random", "Random albums" },
-        { "starred", "Favorite albums" },
+        { "recent", "Recently played", "ic_car_recent" },
+        { "newest", "Recently added", "ic_car_new" },
+        { "frequent", "Most played", "ic_car_frequent" },
+        { "random", "Random albums", "ic_car_random" },
+        { "starred", "Favorite albums", "ic_car_favorite_albums" },
     };
 
     private final Context context;
@@ -102,9 +109,10 @@ final class CarLibrary {
         switch (mediaId) {
             case ROOT: return root();
             case HOME: return tab(HOME);
+            case ALBUMS: return tab(ALBUMS);
             case ARTISTS: return tab(ARTISTS);
             case PLAYLISTS: return tab(PLAYLISTS);
-            case FAVORITES: return tab(FAVORITES);
+            case FAVORITES: return favoritesItem();
             case SHUFFLE: return shuffleItem();
             default: break;
         }
@@ -114,7 +122,7 @@ final class CarLibrary {
         switch (parts[0]) {
             case "albums":
                 for (String[] list : ALBUM_LISTS) {
-                    if (list[0].equals(id)) return albumList(list[0], list[1]);
+                    if (list[0].equals(id)) return albumList(list);
                 }
                 return null;
             case "album": {
@@ -143,8 +151,8 @@ final class CarLibrary {
     }
 
     static boolean isTab(String mediaId) {
-        return mediaId.equals(HOME) || mediaId.equals(ARTISTS) || mediaId.equals(PLAYLISTS)
-            || mediaId.equals(FAVORITES);
+        return mediaId.equals(HOME) || mediaId.equals(ALBUMS) || mediaId.equals(ARTISTS)
+            || mediaId.equals(PLAYLISTS);
     }
 
     /** What a tab shows while signed out: where to sign in. */
@@ -164,7 +172,7 @@ final class CarLibrary {
         switch (parentId) {
             case ROOT: {
                 List<MediaItem> tabs = new ArrayList<>();
-                for (String tab : new String[] { HOME, ARTISTS, PLAYLISTS, FAVORITES }) {
+                for (String tab : new String[] { HOME, ALBUMS, ARTISTS, PLAYLISTS }) {
                     tabs.add(tab(tab));
                 }
                 return tabs;
@@ -173,9 +181,12 @@ final class CarLibrary {
                 server();
                 List<MediaItem> items = new ArrayList<>();
                 items.add(shuffleItem());
-                for (String[] list : ALBUM_LISTS) items.add(albumList(list[0], list[1]));
+                for (String[] list : ALBUM_LISTS) items.add(albumList(list));
+                items.add(favoritesItem());
                 return items;
             }
+            case ALBUMS:
+                return allAlbums();
             case ARTISTS:
                 return artists();
             case PLAYLISTS:
@@ -348,6 +359,22 @@ final class CarLibrary {
         return items;
     }
 
+    private List<MediaItem> allAlbums() throws IOException {
+        AonsokuServer server = server();
+        List<MediaItem> items = new ArrayList<>();
+        for (int offset = 0; offset < ALL_ALBUMS_LIMIT; offset += ALBUM_PAGE) {
+            JSONObject list = server.call("getAlbumList2", AonsokuServer.map(
+                "type", "alphabeticalByName",
+                "size", String.valueOf(ALBUM_PAGE),
+                "offset", String.valueOf(offset)))
+                .optJSONObject("albumList2");
+            List<MediaItem> page = albums(list, "album");
+            items.addAll(page);
+            if (page.size() < ALBUM_PAGE) break;
+        }
+        return items;
+    }
+
     private List<MediaItem> playlists() throws IOException {
         JSONObject playlists = server().call("getPlaylists", null).optJSONObject("playlists");
         List<MediaItem> items = new ArrayList<>();
@@ -419,16 +446,25 @@ final class CarLibrary {
             case HOME:
                 return folder(HOME, "Home", icon("ic_car_home"),
                     MediaMetadata.MEDIA_TYPE_FOLDER_MIXED);
+            case ALBUMS: {
+                Bundle extras = new Bundle();
+                extras.putInt(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_BROWSABLE,
+                    MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM);
+                return folder(ALBUMS, "Albums", icon("ic_car_albums"), extras,
+                    MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS);
+            }
             case ARTISTS:
                 return folder(ARTISTS, "Artists", icon("ic_car_artists"),
                     MediaMetadata.MEDIA_TYPE_FOLDER_ARTISTS);
-            case PLAYLISTS:
+            default:
                 return folder(PLAYLISTS, "Playlists", icon("ic_car_playlists"),
                     MediaMetadata.MEDIA_TYPE_FOLDER_PLAYLISTS);
-            default:
-                return folder(FAVORITES, "Favorites", icon("ic_car_favorites"),
-                    MediaMetadata.MEDIA_TYPE_FOLDER_MIXED);
         }
+    }
+
+    private MediaItem favoritesItem() {
+        return folder(FAVORITES, "Favorite songs", icon("ic_car_favorites"),
+            MediaMetadata.MEDIA_TYPE_FOLDER_MIXED);
     }
 
     /** A drawable of this app's, as the car takes icons. */
@@ -436,11 +472,13 @@ final class CarLibrary {
         return Uri.parse("android.resource://" + context.getPackageName() + "/drawable/" + name);
     }
 
-    private MediaItem albumList(String type, String title) {
+    /** { type, title, icon } from ALBUM_LISTS. */
+    private MediaItem albumList(String[] list) {
         Bundle extras = new Bundle();
         extras.putInt(MediaConstants.EXTRAS_KEY_CONTENT_STYLE_BROWSABLE,
             MediaConstants.EXTRAS_VALUE_CONTENT_STYLE_GRID_ITEM);
-        return folder("albums/" + type, title, null, extras, MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS);
+        return folder("albums/" + list[0], list[1], icon(list[2]), extras,
+            MediaMetadata.MEDIA_TYPE_FOLDER_ALBUMS);
     }
 
     private MediaItem shuffleItem() {
@@ -515,12 +553,27 @@ final class CarLibrary {
         return items;
     }
 
+    /**
+     * The song an item of the player plays: a car item (song/<id>/...) or
+     * one of the web app's (keyed <id>#<n>). Null if neither.
+     */
+    @Nullable
+    static String songIdOf(MediaItem item) {
+        String id = item.mediaId;
+        if (id.startsWith("song/")) {
+            String[] parts = id.split("/");
+            return parts.length > 1 ? Uri.decode(parts[1]) : null;
+        }
+        int hash = id.lastIndexOf('#');
+        return hash > 0 ? id.substring(0, hash) : null;
+    }
+
     private static String songId(JSONObject song, String context) {
         return "song/" + Uri.encode(song.optString("id")) + "/" + context;
     }
 
     /** A playable song: it streams from the server and carries its JSON. */
-    private MediaItem songItem(AonsokuServer server, JSONObject song, String mediaId) {
+    MediaItem songItem(AonsokuServer server, JSONObject song, String mediaId) {
         Bundle extras = new Bundle();
         extras.putString(EXTRA_SONG, song.toString());
         MediaMetadata.Builder metadata = new MediaMetadata.Builder()

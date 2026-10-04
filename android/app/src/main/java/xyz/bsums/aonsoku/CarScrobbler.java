@@ -1,7 +1,6 @@
 package xyz.bsums.aonsoku;
 
 import android.content.Context;
-import android.net.Uri;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -62,7 +61,7 @@ final class CarScrobbler implements Player.Listener {
         pauseClock();
         songId = null;
         if (item == null || !PlaybackEngine.isCarQueue()) return;
-        songId = songIdOf(item);
+        songId = CarLibrary.songIdOf(item);
         if (songId == null) return;
         Long duration = item.mediaMetadata.durationMs;
         durationMs = duration != null ? duration : 0;
@@ -122,13 +121,5 @@ final class CarScrobbler implements Player.Listener {
                 Log.w(TAG, "Scrobble failed", e);
             }
         });
-    }
-
-    /** The song in a car queue item (song/<id>/<context>). */
-    @Nullable
-    private static String songIdOf(MediaItem item) {
-        String[] parts = item.mediaId.split("/");
-        if (parts.length < 2 || !"song".equals(parts[0])) return null;
-        return Uri.decode(parts[1]);
     }
 }
