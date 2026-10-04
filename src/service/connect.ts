@@ -21,6 +21,10 @@ type RemotePlaybackState = {
   originalQueue?: ISong[]
 }
 
+// How long a dropped connection may last, counting only time the app is in
+// view, before a device that was a remote becomes its own player.
+const PASSIVE_HOLD_MS = 15000
+
 class ConnectService {
   private socket: Socket | null = null
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null
@@ -36,6 +40,7 @@ class ConnectService {
   // Resuming the online queue: keep playing once it has been applied.
   private resumePlaying = false
   private _isSyncing = false
+  private passiveHoldTimer: ReturnType<typeof setTimeout> | undefined
   // See JamService: the queue is only sent when it changes.
   private lastSentQueue: ISong[] | null = null
   // What the active device last reported, as applied here. On a passive
@@ -102,6 +107,9 @@ class ConnectService {
       if (this.socket !== socket) return
       this.lastSentQueue = null
       setConnected(true)
+      // Connected again: a remote stays one (until the device list says
+      // otherwise) without having become a player in between.
+      this.endPassiveHold()
       setConnecting(false)
       setThisDeviceId(socket.id!)
       console.log('[Connect] Connected to sync server, device:', socket.id)
@@ -124,15 +132,31 @@ class ConnectService {
       if (this.socket !== socket) return
       setError(describeSyncError(err.message))
       setConnecting(false)
-      console.error('[Connect] Connection error:', err.message)
+      console.error(
+        '[Connect] Connection error:',
+        err.message,
+        `visibility=${document.visibilityState} online=${navigator.onLine}`,
+      )
     })
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason, details) => {
       // A socket that has since been replaced must not touch state.
       if (this.socket !== socket) return
-      // A passive device mirrors "playing" without sound. Once disconnected
-      // it would be free to output audio, so stop it first.
+      const detail =
+        details instanceof Error ? details.message : details?.description
+      console.log(
+        `[Connect] Disconnected from sync server: ${reason}` +
+          (detail ? ` (${detail})` : '') +
+          ` visibility=${document.visibilityState} online=${navigator.onLine}`,
+      )
       if (!useConnectStore.getState().isActivePlayer) {
+        // A passive device stays a remote through a short drop. A phone in
+        // the background loses its network a few seconds after it stops
+        // playing, and becoming a player would start its native player,
+        // bring the network back, reconnect and stop it again, in a loop.
+        if (socket.active) this.startPassiveHold()
+        // It mirrors "playing" without sound; once it is its own player it
+        // must not start making sound, so stop it first.
         this.withSyncing(() =>
           usePlayerStore.getState().actions.setPlayingState(false),
         )
@@ -142,7 +166,6 @@ class ConnectService {
       useJamStore.getState().actions.setAccountJam(undefined)
       setConnected(false)
       this.stopHeartbeat()
-      console.log('[Connect] Disconnected from sync server')
     })
 
     // Which Jam this account is in, from any of its devices (a Jam plays on
@@ -260,6 +283,7 @@ class ConnectService {
 
   disconnect() {
     this.stopHeartbeat()
+    this.endPassiveHold()
     if (this.awaitingOnline) clearTimeout(this.awaitingOnline.timer)
     this.awaitingOnline = null
     this.returning = null
@@ -271,7 +295,17 @@ class ConnectService {
   }
 
   emitPlaybackState() {
-    if (!this.socket?.connected) return
+    if (!this.socket?.connected) {
+      // Played here while waiting to reconnect as a remote: stop waiting
+      // and play on this device.
+      if (
+        useConnectStore.getState().passiveHold &&
+        usePlayerStore.getState().playerState.isPlaying
+      ) {
+        this.endPassiveHold()
+      }
+      return
+    }
 
     const { isActivePlayer } = useConnectStore.getState()
     if (!isActivePlayer) {
@@ -399,6 +433,32 @@ class ConnectService {
       songId: songlist.currentSong?.id ?? '',
       isPlaying: playerState.isPlaying,
       queue: songlist.currentList,
+    }
+  }
+
+  private startPassiveHold() {
+    useConnectStore.getState().actions.setPassiveHold(true)
+    document.addEventListener('visibilitychange', this.armPassiveHold)
+    this.armPassiveHold()
+  }
+
+  // Only time in view counts: in the background a phone cannot reconnect
+  // until it is opened again, and nobody uses it as a player meanwhile.
+  private armPassiveHold = () => {
+    clearTimeout(this.passiveHoldTimer)
+    if (document.visibilityState !== 'visible') return
+    this.passiveHoldTimer = setTimeout(
+      () => this.endPassiveHold(),
+      PASSIVE_HOLD_MS,
+    )
+  }
+
+  private endPassiveHold() {
+    clearTimeout(this.passiveHoldTimer)
+    this.passiveHoldTimer = undefined
+    document.removeEventListener('visibilitychange', this.armPassiveHold)
+    if (useConnectStore.getState().passiveHold) {
+      useConnectStore.getState().actions.setPassiveHold(false)
     }
   }
 

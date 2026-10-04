@@ -347,7 +347,7 @@ io.on('connection', (socket) => {
       }
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       const privateSession = privateSessions[key];
       const leaving = privateSession?.devices.get(socket.id);
       // Not in the map: this socket was replaced by the same device reconnecting.
@@ -368,7 +368,7 @@ io.on('connection', (socket) => {
       }
 
       delete socketMeta[socket.id];
-      console.log(`[Connect] ${username} device disconnected`);
+      console.log(`[Connect] ${username} device "${leaving?.name ?? 'replaced'}" disconnected: ${reason}`);
     });
 
   } else {
@@ -477,7 +477,7 @@ io.on('connection', (socket) => {
       socket.disconnect(true);
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', (reason) => {
       if (jamSessions[sessionId]) {
         jamSessions[sessionId].participants = jamSessions[sessionId].participants.filter(p => p.id !== socket.id);
         const names = [username, ...jamSessions[sessionId].participants.map(p => p.name)];
@@ -491,7 +491,7 @@ io.on('connection', (socket) => {
         emitJamStatusForUsers(names);
       }
       delete socketMeta[socket.id];
-      console.log(`[Jam] ${username} left session ${sessionId}`);
+      console.log(`[Jam] ${username} left session ${sessionId}: ${reason}`);
     });
   }
 });
