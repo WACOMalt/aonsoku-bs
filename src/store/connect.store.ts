@@ -19,6 +19,14 @@ export interface IConnectSession {
   devices: IDevice[]
   thisDeviceId: string | null // socket.id of this device
   isActivePlayer: boolean // convenience: is THIS device the active player?
+  /**
+   * The connection dropped while another device was playing: this device
+   * stays a silent remote until it reconnects or the drop lasts too long
+   * (see ConnectService). A phone loses its connection whenever it sits in
+   * the background, and turning into a player each time would start and
+   * stop its native player over and over.
+   */
+  passiveHold: boolean
 
   /**
    * Listening offline: this device stays off the sync server, so what it
@@ -41,6 +49,7 @@ interface IConnectActions {
   setDevices: (devices: IDevice[]) => void
   setThisDeviceId: (id: string) => void
   setIsActivePlayer: (value: boolean) => void
+  setPassiveHold: (value: boolean) => void
   setOffline: (value: boolean) => void
   setOnlineChoice: (choice: { onlineSong: string | null } | null) => void
   reset: () => void
@@ -60,6 +69,7 @@ export const useConnectStore = create<
         devices: [],
         thisDeviceId: null,
         isActivePlayer: true, // Default to true (single device = active)
+        passiveHold: false,
         actions: {
           setConnected: (value) =>
             set((s) => {
@@ -91,6 +101,10 @@ export const useConnectStore = create<
             set((s) => {
               s.isActivePlayer = value
             }),
+          setPassiveHold: (value) =>
+            set((s) => {
+              s.passiveHold = value
+            }),
           setOffline: (value) =>
             set((s) => {
               s.offline = value
@@ -107,6 +121,7 @@ export const useConnectStore = create<
               s.devices = []
               s.thisDeviceId = null
               s.isActivePlayer = true
+              s.passiveHold = false
               s.onlineChoice = null
             }),
         },
@@ -135,12 +150,13 @@ export const useConnectState = () =>
  * device then mirrors that playback without sound and acts as a remote.
  */
 export function isPassiveConnectDevice() {
-  const { isConnected, isActivePlayer } = useConnectStore.getState()
-  return isConnected && !isActivePlayer
+  const { isConnected, passiveHold, isActivePlayer } =
+    useConnectStore.getState()
+  return (isConnected || passiveHold) && !isActivePlayer
 }
 
 export const useConnectOffline = () => useConnectStore((s) => s.offline)
 
 /** Whether this device may output audio (see isPassiveConnectDevice). */
 export const useCanOutputAudio = () =>
-  useConnectStore((s) => !s.isConnected || s.isActivePlayer)
+  useConnectStore((s) => !(s.isConnected || s.passiveHold) || s.isActivePlayer)
