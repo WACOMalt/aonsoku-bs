@@ -220,18 +220,26 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
         }
       }),
 
-      // The native player moved to a neighbour by itself (the end of a
-      // track, or the notification or a headset); follow it in the queue.
-      // A skip made here has already moved the queue.
+      // The native player moved by itself (the end of a track, the
+      // notification, a headset, or a pick in the car's queue, which can be
+      // several tracks ahead); follow it in the queue. A skip made here has
+      // already moved the queue.
       NativePlayer.addListener('transition', ({ key }) => {
         const { previous, current, upcoming } = held.current
         const { currentList: list, currentSongIndex: at } =
           usePlayerStore.getState().songlist
-        const [next, ...rest] = upcoming
-        if (next?.key === key) {
-          held.current = { previous: current, current: next, upcoming: rest }
+        const ahead = upcoming.findIndex((entry) => entry.key === key)
+        if (ahead >= 0) {
+          const target = upcoming[ahead]
+          held.current = {
+            previous: ahead > 0 ? upcoming[ahead - 1] : current,
+            current: target,
+            upcoming: upcoming.slice(ahead + 1),
+          }
           restartClock(key, 0)
-          if (list[at]?.id !== next.songId) playNextSong()
+          if (list[at]?.id !== target.songId) {
+            for (let step = 0; step <= ahead; step++) playNextSong()
+          }
         } else if (previous?.key === key && current) {
           held.current = {
             previous: null,
