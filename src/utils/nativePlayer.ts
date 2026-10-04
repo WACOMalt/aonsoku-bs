@@ -5,6 +5,7 @@
  */
 
 import { type PluginListenerHandle, registerPlugin } from '@capacitor/core'
+import { ISong } from '@/types/responses/song'
 import { getNativePlatform } from '@/utils/platform'
 
 export interface NativeItem {
@@ -26,6 +27,19 @@ export interface NativeProgress {
   durationMs: number
   playing: boolean
   state: number
+}
+
+/**
+ * A list Android Auto started, which the native player holds whole until
+ * this app adopts it as its queue (see service/car.ts).
+ */
+export interface CarQueue {
+  songs: ISong[]
+  index: number
+  /** The native player's key for the current song. */
+  key: string
+  positionMs: number
+  playing: boolean
 }
 
 interface NativePlayerPlugin {
@@ -50,6 +64,16 @@ interface NativePlayerPlugin {
   stop(): Promise<void>
   setKeepAwake(options: { enabled: boolean }): Promise<void>
   getState(): Promise<NativeProgress>
+  /** The server Android Auto browses; no url signs it out. */
+  setServer(options: {
+    url: string
+    username: string
+    password: string
+    authType: 'token' | 'password'
+    protocolVersion: string
+  }): Promise<void>
+  getCarQueue(): Promise<CarQueue | { songs: null }>
+  adoptCarQueue(): Promise<void>
 
   addListener(
     event: 'progress',
@@ -75,6 +99,10 @@ interface NativePlayerPlugin {
     event: 'command',
     callback: (data: { action: 'nexttrack' | 'previoustrack' }) => void,
   ): Promise<PluginListenerHandle>
+  addListener(
+    event: 'carQueue',
+    callback: (data: CarQueue) => void,
+  ): Promise<PluginListenerHandle>
 }
 
 // Registered once, synchronously (see androidMediaSession.ts for why).
@@ -85,13 +113,18 @@ export const NativePlayer =
 
 /**
  * Whether songs play through the native player: only in the Android app,
- * with gapless on (turning it off falls back to the WebView's player), and
- * only on the device that outputs the audio (a passive Connect device plays
- * nothing, and its notification mirrors the other device instead).
+ * with gapless on (turning it off falls back to the WebView's player) or
+ * once Android Auto has started something (the car controls the native
+ * player only), and only on the device that outputs the audio (a passive
+ * Connect device plays nothing, and its notification mirrors the other
+ * device instead).
  */
 export function usesNativeSongPlayer(
   canOutputAudio: boolean,
   gaplessEnabled: boolean,
+  carStarted = false,
 ) {
-  return NativePlayer !== null && canOutputAudio && gaplessEnabled
+  return (
+    NativePlayer !== null && canOutputAudio && (gaplessEnabled || carStarted)
+  )
 }

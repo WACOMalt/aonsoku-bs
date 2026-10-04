@@ -13,6 +13,7 @@ import { RadioInfo } from '@/app/components/player/radio-info'
 import { TrackInfo } from '@/app/components/player/track-info'
 import { podcasts } from '@/service/podcasts'
 import { useAppStore } from '@/store/app.store'
+import { useCarStore } from '@/store/car.store'
 import { useCanOutputAudio } from '@/store/connect.store'
 import {
   getVolume,
@@ -86,8 +87,14 @@ export function Player() {
   const currentPlaybackRate = usePlayerStore().playerState.currentPlaybackRate
   const canOutputAudio = useCanOutputAudio()
   const { enabled: gaplessEnabled } = useGaplessSettings()
-  // The Android app plays songs natively (see NativeSongAudio).
-  const nativeSongs = usesNativeSongPlayer(canOutputAudio, gaplessEnabled)
+  // The Android app plays songs natively (see NativeSongAudio), once it is
+  // known whether Android Auto is playing something to take over.
+  const { checked: carChecked, started: carStarted } = useCarStore()
+  const nativeSongs = usesNativeSongPlayer(
+    canOutputAudio,
+    gaplessEnabled,
+    carStarted,
+  )
 
   const song = currentList[currentSongIndex]
 
@@ -268,7 +275,7 @@ export function Player() {
         {isSong &&
           song &&
           (nativeSongs ? (
-            <NativeSongAudio audioRef={audioRef} />
+            carChecked && <NativeSongAudio audioRef={audioRef} />
           ) : (
             <SongAudio audioRef={audioRef} />
           ))}

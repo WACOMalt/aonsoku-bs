@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
 import { getSimpleCoverArtUrl, getSongStreamUrl } from '@/api/httpClient'
 import { useAppMediaCache } from '@/store/app.store'
+import { useCarStore } from '@/store/car.store'
 import {
   getVolume,
   usePlayerActions,
@@ -288,6 +289,9 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
     const { song: track, upcomingSongs: after, prevSong: before } = live.current
     if (!track || !NativePlayer) return
 
+    // Loading replaces whatever the native player holds, a car queue too.
+    if (useCarStore.getState().adoption)
+      useCarStore.setState({ adoption: null })
     const current = makeEntry(track)
     const previous = before ? makeEntry(before) : null
     const upcoming = after.map(makeEntry)
@@ -308,6 +312,29 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
   }, [getCurrentProgress, makeEntry, restartClock, setCurrentDuration])
   const loadRef = useRef(loadCurrent)
   loadRef.current = loadCurrent
+
+  // Android Auto started a list, which the native player is playing (see
+  // service/car.ts). Once the queue here has it, take over the song that
+  // plays, under the native player's key, without loading it again, and
+  // hand it this queue's tracks around it.
+  const carAdoption = useCarStore((state) => state.adoption)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the adoption
+  useEffect(() => {
+    if (!carAdoption || !song || !NativePlayer) return
+    if (carAdoption.songId !== song.id) return
+    useCarStore.setState({ adoption: null })
+
+    const entry = makeEntry(song)
+    const current: Entry = {
+      key: carAdoption.key,
+      songId: song.id,
+      item: { ...entry.item, key: carAdoption.key },
+    }
+    held.current = { previous: null, current, upcoming: [] }
+    restartClock(carAdoption.key, carAdoption.positionMs)
+    setCurrentDuration(song.duration)
+    NativePlayer.adoptCarQueue().then(() => syncAdjacent())
+  }, [carAdoption, song?.id])
 
   // The current track changed: move to a neighbour the native player
   // already holds when it is the one, otherwise load it.
@@ -351,37 +378,38 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
   // upcoming ones keep playing if this page stalls in the background.
   // Tracks already held in the right order keep their entries, so a
   // preloaded track is not loaded again.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the tracks
-  useEffect(() => {
-    if (!song || !NativePlayer) return
+  const syncAdjacent = useCallback(() => {
+    const { song: track, upcomingSongs: after, prevSong: before } = live.current
+    if (!track || !NativePlayer) return
     const { previous, current, upcoming } = held.current
     // The current track is still being loaded.
-    if (current?.songId !== song.id) return
+    if (current?.songId !== track.id) return
 
-    const samePrevious = (previous?.songId ?? null) === (prevSong?.id ?? null)
+    const samePrevious = (previous?.songId ?? null) === (before?.id ?? null)
     const kept = upcoming.findIndex(
-      (entry, index) => entry.songId !== upcomingSongs[index]?.id,
+      (entry, index) => entry.songId !== after[index]?.id,
     )
     const keep = kept === -1 ? upcoming.length : kept
-    if (
-      samePrevious &&
-      keep === upcomingSongs.length &&
-      keep === upcoming.length
-    )
+    if (samePrevious && keep === after.length && keep === upcoming.length)
       return
 
     held.current = {
-      previous: samePrevious ? previous : prevSong ? makeEntry(prevSong) : null,
+      previous: samePrevious ? previous : before ? makeEntry(before) : null,
       current,
       upcoming: [
         ...upcoming.slice(0, keep),
-        ...upcomingSongs.slice(keep).map(makeEntry),
+        ...after.slice(keep).map(makeEntry),
       ],
     }
     NativePlayer.setAdjacent({
       previous: held.current.previous?.item,
       upcoming: held.current.upcoming.map((entry) => entry.item),
     })
+  }, [makeEntry])
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the tracks
+  useEffect(() => {
+    syncAdjacent()
   }, [song?.id, prevSong?.id, upcomingIds])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on play state

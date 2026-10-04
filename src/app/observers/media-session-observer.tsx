@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useCarStore } from '@/store/car.store'
 import { useCanOutputAudio } from '@/store/connect.store'
 import { useJamStore } from '@/store/jam.store'
 import {
@@ -34,8 +35,9 @@ export function MediaSessionObserver() {
   const { enabled: gaplessEnabled } = useGaplessSettings()
   // Songs played by the Android app's native player have their own media
   // session and notification; this one would only duplicate them.
+  const carStarted = useCarStore((state) => state.started)
   const nativeSongs =
-    isSong && usesNativeSongPlayer(canOutputAudio, gaplessEnabled)
+    isSong && usesNativeSongPlayer(canOutputAudio, gaplessEnabled, carStarted)
 
   const song = currentList[currentSongIndex] ?? null
   const radio = radioList[currentSongIndex] ?? null

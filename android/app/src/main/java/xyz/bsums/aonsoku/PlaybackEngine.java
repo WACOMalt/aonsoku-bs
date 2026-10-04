@@ -1,6 +1,8 @@
 package xyz.bsums.aonsoku;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.annotation.OptIn;
 import androidx.media3.common.AudioAttributes;
@@ -31,8 +33,20 @@ final class PlaybackEngine {
         void onCommand(String action);
     }
 
+    /** A list started from the car (see PlaybackService.QueuePlayer). */
+    interface CarQueueListener {
+        void onCarQueue();
+    }
+
+    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+
     private static ExoPlayer player;
     private static CommandListener commandListener;
+    private static CarQueueListener carQueueListener;
+    // Whether the player holds a list started from the car, which the web
+    // app has not taken over yet: it holds all of it, not a window of the
+    // web app's queue.
+    private static boolean carQueue;
 
     private PlaybackEngine() {}
 
@@ -75,6 +89,30 @@ final class PlaybackEngine {
         commandListener = listener;
     }
 
+    static void setCarQueueListener(CarQueueListener listener) {
+        carQueueListener = listener;
+    }
+
+    static boolean isCarQueue() {
+        return carQueue;
+    }
+
+    /**
+     * The car is starting a list; tells the web app, if it runs, to adopt it
+     * once the player has it.
+     */
+    static void startCarQueue() {
+        DebugLog.i(TAG, "car queue started");
+        carQueue = true;
+        CarQueueListener listener = carQueueListener;
+        if (listener != null) MAIN.post(listener::onCarQueue);
+    }
+
+    /** The web app took the player over: its queue again, not the car's. */
+    static void endCarQueue() {
+        carQueue = false;
+    }
+
     static void sendCommand(String action) {
         CommandListener listener = commandListener;
         if (listener != null) listener.onCommand(action);
@@ -91,7 +129,8 @@ final class PlaybackEngine {
         if (index + 1 < player.getMediaItemCount()) {
             player.seekTo(index + 1, 0);
             if (player.getPlaybackState() == Player.STATE_IDLE) player.prepare();
-        } else {
+        } else if (!carQueue) {
+            // A car queue is held whole: past its end there is nothing.
             sendCommand("nexttrack");
         }
     }
@@ -103,8 +142,10 @@ final class PlaybackEngine {
         if (index >= 1) {
             player.seekTo(index - 1, 0);
             if (player.getPlaybackState() == Player.STATE_IDLE) player.prepare();
-        } else {
+        } else if (!carQueue) {
             sendCommand("previoustrack");
+        } else {
+            player.seekTo(0);
         }
     }
 }

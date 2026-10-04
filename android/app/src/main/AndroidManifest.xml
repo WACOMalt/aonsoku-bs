@@ -67,15 +67,36 @@
             android:foregroundServiceType="mediaPlayback"
             android:exported="false" />
 
-        <!-- Song playback (ExoPlayer) with its media session and notification -->
+        <!-- Song playback (ExoPlayer) with its media session and notification,
+             and the library Android Auto browses -->
         <service
             android:name=".PlaybackService"
             android:foregroundServiceType="mediaPlayback"
             android:exported="true">
             <intent-filter>
+                <action android:name="androidx.media3.session.MediaLibraryService" />
                 <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
             </intent-filter>
         </service>
+
+        <!-- Android Auto: a media app, with its icon for the car's screens -->
+        <meta-data
+            android:name="com.google.android.gms.car.application"
+            android:resource="@xml/automotive_app_desc" />
+        <meta-data
+            android:name="androidx.car.app.TintableAttributionIcon"
+            android:resource="@drawable/ic_notification" />
+        <meta-data
+            android:name="com.google.android.gms.car.notification.SmallIcon"
+            android:resource="@drawable/ic_notification" />
+
+        <!-- Cover art for Android Auto, which only opens content:// images.
+             Read-only, and it serves nothing but cover art. -->
+        <provider
+            android:name=".ArtworkProvider"
+            android:authorities="${applicationId}.artwork"
+            android:exported="true" />
 
         <!-- Media button receiver for bluetooth/headset controls -->
         <receiver

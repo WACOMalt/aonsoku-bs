@@ -45,8 +45,10 @@ import java.util.List;
  *
  * Events: "progress" (position), "transition" (a new item started),
  * "playing" (play/pause from outside the app: notification, headset, another
- * app taking audio focus), "ended" (nothing left to play), "error" and
- * "command" (next/previous from the notification or a headset).
+ * app taking audio focus), "ended" (nothing left to play), "error",
+ * "command" (next/previous from the notification or a headset) and
+ * "carQueue" (Android Auto started a list, for the web app to adopt; see
+ * getCarQueue).
  */
 @CapacitorPlugin(name = "NativePlayer")
 public class NativePlayerPlugin extends Plugin {
@@ -84,9 +86,10 @@ public class NativePlayerPlugin extends Plugin {
             data.put("key", item.mediaId);
             data.put("reason", reason);
             notifyListeners("transition", data);
-            // Keep one item before the current one, for previous.
+            // Keep one item before the current one, for previous. A car
+            // queue is held whole until the web app adopts it.
             main.post(() -> {
-                if (player == null) return;
+                if (player == null || PlaybackEngine.isCarQueue()) return;
                 int index = player.getCurrentMediaItemIndex();
                 if (index > 1) player.removeMediaItems(0, index - 1);
             });
@@ -156,6 +159,10 @@ public class NativePlayerPlugin extends Plugin {
             data.put("action", action);
             notifyListeners("command", data);
         });
+        PlaybackEngine.setCarQueueListener(() -> {
+            JSObject queue = carQueueData();
+            if (queue != null) notifyListeners("carQueue", queue);
+        });
     }
 
     @Override
@@ -171,6 +178,7 @@ public class NativePlayerPlugin extends Plugin {
             closeSession();
         });
         PlaybackEngine.setCommandListener(null);
+        PlaybackEngine.setCarQueueListener(null);
         super.handleOnDestroy();
     }
 
@@ -197,6 +205,7 @@ public class NativePlayerPlugin extends Plugin {
             DebugLog.i(TAG, "load " + current.getString("key") + " at " + positionMs
                 + (playWhenReady ? " playing" : " paused"));
             ExoPlayer p = ensurePlayer();
+            PlaybackEngine.endCarQueue();
             List<MediaItem> items = new ArrayList<>();
             if (previous != null) items.add(toMediaItem(previous));
             items.add(toMediaItem(current));
@@ -340,6 +349,7 @@ public class NativePlayerPlugin extends Plugin {
         main.post(() -> {
             DebugLog.i(TAG, "stop");
             requestedPlaying = false;
+            PlaybackEngine.endCarQueue();
             main.removeCallbacks(progressTick);
             if (player != null) {
                 player.stop();
@@ -360,6 +370,68 @@ public class NativePlayerPlugin extends Plugin {
     public void setKeepAwake(PluginCall call) {
         AonsokuWebView.setAwake("page", Boolean.TRUE.equals(call.getBoolean("enabled", false)));
         call.resolve();
+    }
+
+    /**
+     * The server the web app is signed in to, for Android Auto to browse
+     * while the app is closed: { url, username, password, authType,
+     * protocolVersion }, the password as the web app keeps it (a token or
+     * encoded). Without a url, forgets it (signed out).
+     */
+    @PluginMethod
+    public void setServer(PluginCall call) {
+        String url = call.getString("url", "");
+        String username = call.getString("username", "");
+        String password = call.getString("password", "");
+        if (url == null || url.isEmpty() || username == null || username.isEmpty()
+            || password == null || password.isEmpty()) {
+            AonsokuServer.clear(getContext());
+        } else {
+            AonsokuServer.save(
+                getContext(), url, username, password,
+                call.getString("authType", "token"),
+                call.getString("protocolVersion", "1.16.0"));
+        }
+        call.resolve();
+    }
+
+    /**
+     * The list Android Auto started, if the player holds one the web app has
+     * not adopted: { songs (Subsonic JSON), index, key, positionMs, playing },
+     * or { songs: null }.
+     */
+    @PluginMethod
+    public void getCarQueue(PluginCall call) {
+        main.post(() -> {
+            JSObject queue = carQueueData();
+            if (queue == null) {
+                queue = new JSObject();
+                queue.put("songs", null);
+            }
+            call.resolve(queue);
+        });
+    }
+
+    /**
+     * The web app now holds the car's list as its queue: from here the
+     * player holds its window of it again (see setAdjacent), and the current
+     * item, which keeps playing, is reported under the car's key.
+     */
+    @PluginMethod
+    public void adoptCarQueue(PluginCall call) {
+        main.post(() -> {
+            DebugLog.i(TAG, "car queue adopted");
+            ExoPlayer p = ensurePlayer();
+            PlaybackEngine.endCarQueue();
+            requestedPlaying = p.getPlayWhenReady();
+            updateAwake();
+            emitProgress();
+            if (p.isPlaying()) {
+                main.removeCallbacks(progressTick);
+                main.post(progressTick);
+            }
+            call.resolve();
+        });
     }
 
     @PluginMethod
@@ -458,6 +530,37 @@ public class NativePlayerPlugin extends Plugin {
         if (player == null) return "";
         MediaItem item = player.getCurrentMediaItem();
         return item == null ? "" : item.mediaId;
+    }
+
+    /** The car queue the player holds, or null (see getCarQueue). */
+    @Nullable
+    private JSObject carQueueData() {
+        ExoPlayer p = PlaybackEngine.peek();
+        if (p == null || !PlaybackEngine.isCarQueue() || p.getMediaItemCount() == 0) return null;
+        JSArray songs = new JSArray();
+        int index = 0;
+        int current = p.getCurrentMediaItemIndex();
+        for (int i = 0; i < p.getMediaItemCount(); i++) {
+            MediaItem item = p.getMediaItemAt(i);
+            Bundle extras = item.mediaMetadata.extras;
+            String song = extras != null ? extras.getString(CarLibrary.EXTRA_SONG) : null;
+            if (song == null) continue;
+            try {
+                if (i == current) index = songs.length();
+                songs.put(new org.json.JSONObject(song));
+            } catch (org.json.JSONException e) {
+                Log.w(TAG, "Skipping a malformed car queue item", e);
+            }
+        }
+        if (songs.length() == 0) return null;
+        MediaItem currentItem = p.getCurrentMediaItem();
+        JSObject data = new JSObject();
+        data.put("songs", songs);
+        data.put("index", index);
+        data.put("key", currentItem != null ? currentItem.mediaId : "");
+        data.put("positionMs", p.getCurrentPosition());
+        data.put("playing", p.getPlayWhenReady());
+        return data;
     }
 
     private JSObject progressData() {

@@ -21,6 +21,9 @@ type RemotePlaybackState = {
   originalQueue?: ISong[]
 }
 
+// How long a take-over (see takeOver) waits for the server.
+const TAKE_OVER_MS = 5000
+
 class ConnectService {
   private socket: Socket | null = null
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null
@@ -36,6 +39,7 @@ class ConnectService {
   // Resuming the online queue: keep playing once it has been applied.
   private resumePlaying = false
   private _isSyncing = false
+  private takingOverUntil = 0
   // See JamService: the queue is only sent when it changes.
   private lastSentQueue: ISong[] | null = null
   // What the active device last reported, as applied here. On a passive
@@ -320,6 +324,24 @@ class ConnectService {
     this.sendClaim()
   }
 
+  /**
+   * Plays here something started on this device from outside the app
+   * (Android Auto): the change is made here without being passed on to the
+   * device that plays, and this device takes over with it.
+   */
+  takeOver(change: () => void) {
+    const passive =
+      this.socket?.connected && !useConnectStore.getState().isActivePlayer
+    if (!passive) {
+      change()
+      return
+    }
+    // Until the server makes this device the one that plays.
+    this.takingOverUntil = Date.now() + TAKE_OVER_MS
+    this.withSyncing(change)
+    this.sendClaim()
+  }
+
   /** Asks the server to make this device the one that plays. */
   private sendClaim() {
     const thisDeviceId = this.socket?.id
@@ -358,6 +380,8 @@ class ConnectService {
    * nothing is playing anywhere.
    */
   private forwardLocalChange() {
+    // Taking over (see takeOver): what changes here is for here.
+    if (Date.now() < this.takingOverUntil) return
     const { songlist, playerState } = usePlayerStore.getState()
     const song = songlist.currentSong
     if (!song) return
