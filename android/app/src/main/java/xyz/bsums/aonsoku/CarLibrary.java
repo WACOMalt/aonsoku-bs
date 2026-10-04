@@ -142,6 +142,23 @@ final class CarLibrary {
         }
     }
 
+    static boolean isTab(String mediaId) {
+        return mediaId.equals(HOME) || mediaId.equals(ARTISTS) || mediaId.equals(PLAYLISTS)
+            || mediaId.equals(FAVORITES);
+    }
+
+    /** What a tab shows while signed out: where to sign in. */
+    static List<MediaItem> signInHint() {
+        MediaMetadata metadata = new MediaMetadata.Builder()
+            .setTitle("Sign in on your phone")
+            .setSubtitle("Open Aonsoku on your phone and connect to your server")
+            .setIsBrowsable(false)
+            .setIsPlayable(false)
+            .build();
+        return Collections.singletonList(
+            new MediaItem.Builder().setMediaId("signin").setMediaMetadata(metadata).build());
+    }
+
     /** The children of a browsable item. */
     List<MediaItem> children(String parentId) throws IOException {
         switch (parentId) {

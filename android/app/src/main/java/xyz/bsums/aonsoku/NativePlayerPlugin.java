@@ -385,7 +385,7 @@ public class NativePlayerPlugin extends Plugin {
         String password = call.getString("password", "");
         if (url == null || url.isEmpty() || username == null || username.isEmpty()
             || password == null || password.isEmpty()) {
-            AonsokuServer.clear(getContext());
+            if (AonsokuServer.load(getContext()) != null) AonsokuServer.clear(getContext());
         } else {
             AonsokuServer.save(
                 getContext(), url, username, password,

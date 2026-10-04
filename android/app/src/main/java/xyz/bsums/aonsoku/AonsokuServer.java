@@ -3,6 +3,8 @@ package xyz.bsums.aonsoku;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.net.Uri;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.annotation.Nullable;
 
@@ -32,6 +34,9 @@ final class AonsokuServer {
     private static final String SALT = "40n50kuPl4y3r";
     private static final String CLIENT = "Aonsoku";
     private static final int TIMEOUT_MS = 15000;
+
+    /** Told when the sign-in changes, on the main thread. */
+    @Nullable private static Runnable changeListener;
 
     final String url;
     final String username;
@@ -65,21 +70,39 @@ final class AonsokuServer {
             prefs.getString("protocolVersion", "1.16.0"));
     }
 
+    static void setChangeListener(@Nullable Runnable listener) {
+        changeListener = listener;
+    }
+
+    private static void changed() {
+        Runnable listener = changeListener;
+        if (listener != null) new Handler(Looper.getMainLooper()).post(listener);
+    }
+
     static void save(
         Context context, String url, String username, String password, String authType,
         String protocolVersion
     ) {
-        prefs(context).edit()
+        SharedPreferences prefs = prefs(context);
+        boolean same = trimSlash(url).equals(prefs.getString("url", ""))
+            && username.equals(prefs.getString("username", ""))
+            && password.equals(prefs.getString("password", ""))
+            && authType.equals(prefs.getString("authType", ""))
+            && protocolVersion.equals(prefs.getString("protocolVersion", ""));
+        if (same) return;
+        prefs.edit()
             .putString("url", trimSlash(url))
             .putString("username", username)
             .putString("password", password)
             .putString("authType", authType)
             .putString("protocolVersion", protocolVersion)
             .apply();
+        changed();
     }
 
     static void clear(Context context) {
         prefs(context).edit().clear().apply();
+        changed();
     }
 
     /** The URL of an API method, with the sign-in and these parameters. */

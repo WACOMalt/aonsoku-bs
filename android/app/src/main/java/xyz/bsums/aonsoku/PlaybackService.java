@@ -74,7 +74,22 @@ public class PlaybackService extends MediaLibraryService {
         PendingIntent launch = launchIntent();
         if (launch != null) builder.setSessionActivity(launch);
         session = builder.build();
+        // Signing in or out on the phone shows in the car at once.
+        AonsokuServer.setChangeListener(this::refreshLibrary);
         DebugLog.i(TAG, "media session created");
+    }
+
+    /** Has the car load its lists again (the sign-in changed). */
+    private void refreshLibrary() {
+        if (session == null) return;
+        DebugLog.i(TAG, "library refreshed");
+        session.clearReplicatedLibraryError();
+        for (String id : new String[] {
+            CarLibrary.ROOT, CarLibrary.HOME, CarLibrary.ARTISTS, CarLibrary.PLAYLISTS,
+            CarLibrary.FAVORITES,
+        }) {
+            session.notifyChildrenChanged(id, Integer.MAX_VALUE, null);
+        }
     }
 
     @Override
@@ -99,6 +114,7 @@ public class PlaybackService extends MediaLibraryService {
     @Override
     public void onDestroy() {
         DebugLog.i(TAG, "media session closed");
+        AonsokuServer.setChangeListener(null);
         if (scrobbler != null) {
             scrobbler.release();
             scrobbler = null;
@@ -172,6 +188,14 @@ public class PlaybackService extends MediaLibraryService {
                         children = limitRoot(children, params);
                     }
                     return LibraryResult.ofItemList(pageOf(children, page, pageSize), params);
+                } catch (CarLibrary.SignedOutException e) {
+                    // A tab says where to sign in; an error would show as
+                    // an empty list.
+                    if (CarLibrary.isTab(parentId)) {
+                        return LibraryResult.ofItemList(
+                            ImmutableList.copyOf(CarLibrary.signInHint()), params);
+                    }
+                    return error(e, params);
                 } catch (IOException e) {
                     return error(e, params);
                 }
