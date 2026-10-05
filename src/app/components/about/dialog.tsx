@@ -9,9 +9,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/app/components/ui/dialog'
+import { CheckForUpdates } from '@/app/components/update/check-for-updates'
 import githubIcon from '@/assets/icons/github-mark-white.svg'
 import { subsonic } from '@/service/subsonic'
 import { getAppInfo } from '@/utils/appName'
+import { getUpdateSource } from '@/utils/appUpdate'
 import { queryKeys } from '@/utils/queryKeys'
 
 interface AboutDialogProps {
@@ -22,6 +24,8 @@ interface AboutDialogProps {
 export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
   const { t } = useTranslation()
   const { name, version, url } = getAppInfo()
+
+  const canUpdate = getUpdateSource() !== null
 
   const { data: server, isLoading } = useQuery({
     queryKey: [queryKeys.update.serverInfo],
@@ -47,8 +51,9 @@ export function AboutDialog({ open, onOpenChange }: AboutDialogProps) {
             <div className="flex flex-col gap-2 h-full text-sm">
               <span className="text-xs font-medium">{t('about.client')}</span>
               <div className="flex flex-col gap-1 justify-center text-muted-foreground">
-                <div className="flex gap-2">
+                <div className="flex gap-2 items-center flex-wrap">
                   <MultiBadge label={t('about.version')}>{version}</MultiBadge>
+                  {canUpdate && <CheckForUpdates />}
                 </div>
               </div>
             </div>

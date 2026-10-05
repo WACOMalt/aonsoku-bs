@@ -17,6 +17,7 @@ import {
 import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { useAppUpdate } from '@/store/app.store'
+import { useUpdatePrefs } from '@/store/update.store'
 import { getAppInfo } from '@/utils/appName'
 import { getUpdateSource, UpdateError } from '@/utils/appUpdate'
 import { isMacOS } from '@/utils/desktop'
@@ -39,6 +40,8 @@ export function UpdateObserver() {
   // Android: the app may not install apps yet; the dialog explains it.
   const [needsPermission, setNeedsPermission] = useState(false)
   const source = getUpdateSource()
+  const { autoCheck, skippedVersion, setAutoCheck, setSkippedVersion } =
+    useUpdatePrefs()
 
   const { data: update } = useQuery({
     queryKey: [queryKeys.update.check],
@@ -50,15 +53,20 @@ export function UpdateObserver() {
         return null
       }
     },
-    enabled: !!source && !remindOnNextBoot,
+    // Each start, unless turned off; "Check for updates" (About, Settings)
+    // asks at any time.
+    enabled: !!source && autoCheck && !remindOnNextBoot,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     staleTime: Infinity,
     gcTime: Infinity,
   })
 
+  // Offered by itself unless it's the version the listener ignored; asking
+  // for a check opens the dialog either way (see CheckForUpdates).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on a new check result
   useEffect(() => {
-    if (update) setOpenDialog(true)
+    if (update && update.version !== skippedVersion) setOpenDialog(true)
   }, [setOpenDialog, update])
 
   if (!source || !update) return null
@@ -147,6 +155,37 @@ export function UpdateObserver() {
             <strong>Install update</strong> again.
           </p>
         )}
+
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+          <button
+            type="button"
+            className="text-muted-foreground underline-offset-4 hover:underline hover:text-foreground disabled:opacity-50"
+            disabled={updateHasStarted}
+            onClick={() => {
+              setSkippedVersion(update.version)
+              setOpenDialog(false)
+              toast.info(
+                `Version ${update.version} won't be offered again. A newer one will.`,
+              )
+            }}
+          >
+            Ignore this update
+          </button>
+          <button
+            type="button"
+            className="text-muted-foreground underline-offset-4 hover:underline hover:text-foreground disabled:opacity-50"
+            disabled={updateHasStarted}
+            onClick={() => {
+              setAutoCheck(false)
+              setOpenDialog(false)
+              toast.info(
+                'Update checks are off. Turn them back on in Settings → Content → Updates.',
+              )
+            }}
+          >
+            Stop checking for updates
+          </button>
+        </div>
 
         <AlertDialogFooter>
           <form onSubmit={handleUpdate} className="flex gap-2">

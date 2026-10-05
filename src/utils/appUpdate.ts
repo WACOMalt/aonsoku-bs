@@ -99,14 +99,10 @@ const AppUpdate =
     ? registerPlugin<AppUpdatePlugin>('AppUpdate')
     : null
 
+// Read on every app start and on "Check for updates" (GitHub allows 60
+// unauthenticated requests an hour, far more than that).
 const LATEST_RELEASE =
   'https://api.github.com/repos/WACOMalt/aonsoku-bs/releases/latest'
-// A check is reused for this long (reopening the app often), so a new
-// release shows soon after it's out. GitHub allows 60 unauthenticated
-// requests an hour; this stays far inside that.
-const CHECK_EVERY_MS = 15 * 60 * 1000
-const CHECK_KEY = 'aonsoku-android-update-check'
-
 interface AndroidRelease extends AvailableUpdate {
   apkUrl: string
 }
@@ -135,17 +131,8 @@ export function isNewerVersion(candidate: string, current: string) {
   return false
 }
 
+/** The latest published release with an APK, read from GitHub. */
 async function latestRelease(): Promise<AndroidRelease | null> {
-  try {
-    const saved = JSON.parse(localStorage.getItem(CHECK_KEY) ?? 'null') as {
-      at: number
-      release: AndroidRelease | null
-    } | null
-    if (saved && Date.now() - saved.at < CHECK_EVERY_MS) return saved.release
-  } catch {
-    // Unreadable or no storage: check again.
-  }
-
   const response = await fetch(LATEST_RELEASE, {
     headers: { Accept: 'application/vnd.github+json' },
   })
@@ -160,23 +147,12 @@ async function latestRelease(): Promise<AndroidRelease | null> {
   const apk = release.assets.find((asset) =>
     asset.name.endsWith('-android.apk'),
   )
-  const found: AndroidRelease | null =
-    release.draft || release.prerelease || !apk
-      ? null
-      : {
-          version: release.tag_name.replace(/^v/, ''),
-          notes: release.body ?? '',
-          apkUrl: apk.browser_download_url,
-        }
-  try {
-    localStorage.setItem(
-      CHECK_KEY,
-      JSON.stringify({ at: Date.now(), release: found }),
-    )
-  } catch {
-    // Checked again next time.
+  if (release.draft || release.prerelease || !apk) return null
+  return {
+    version: release.tag_name.replace(/^v/, ''),
+    notes: release.body ?? '',
+    apkUrl: apk.browser_download_url,
   }
-  return found
 }
 
 const androidUpdates: UpdateSource = {

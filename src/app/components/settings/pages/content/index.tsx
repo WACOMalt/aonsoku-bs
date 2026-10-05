@@ -1,9 +1,11 @@
+import { getUpdateSource } from '@/utils/appUpdate'
 import { CachesContent } from './caches'
 import { FeatureContent } from './features'
 import { HomeContent } from './home'
 import { PodcastContent } from './podcast'
 import { SidebarContent } from './sidebar'
 import { SyncServerContent } from './sync-server'
+import { UpdatesContent } from './updates'
 
 export function Content() {
   return (
@@ -14,6 +16,7 @@ export function Content() {
       <PodcastContent />
       <SyncServerContent />
       <CachesContent />
+      {getUpdateSource() && <UpdatesContent />}
     </div>
   )
 }
