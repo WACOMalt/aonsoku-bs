@@ -990,6 +990,9 @@ function createLaneShim(
       laneRef.current?.setVolume(value)
     },
     playbackRate: 1,
+    // Decoded in memory: always ready to play (see Jam's sync).
+    readyState: 4,
+    seeking: false,
     play() {
       usePlayerStore.getState().actions.setPlayingState(true)
       return Promise.resolve()

@@ -17,12 +17,16 @@ import {
 } from '@/utils/syncAuth'
 import { getSyncServerUrl } from '@/utils/syncServerUrl'
 
+// After a sync seek, how long before another one: a seek has to load.
+const SYNC_SEEK_SETTLE_MS = 3000
+
 class JamService {
   private socket: Socket | null = null
   private initialized = false
   // Suppresses both the drift-correction subscriber AND the emit subscriber
   // while we are applying a remote sync, preventing feedback loops
   private _isSyncing = false
+  private lastSyncSeek = 0
   // The queue last sent to the server. Updates only carry the queue when it
   // changes; reset on every connect so a fresh server session gets it once.
   private lastSentQueue: ISong[] | null = null
@@ -295,6 +299,7 @@ class JamService {
 
     try {
       const { actions, songlist, playerState } = usePlayerStore.getState()
+      const songBefore = songlist.currentSong?.id
 
       // Save the lead's last known state so we can re-sync guests who drift
       useJamStore.getState().actions.setLastLeadState({
@@ -354,18 +359,43 @@ class JamService {
         }
       }
 
+      // Moved to another song (joining, or the host skipped): it starts at
+      // the host's position when it loads, rather than being seeked while
+      // it's still loading.
+      const songChanged =
+        usePlayerStore.getState().songlist.currentSong?.id !== songBefore
+      if (songChanged) {
+        actions.setProgress(Math.floor(data.progress))
+        this.lastSyncSeek = Date.now()
+      }
+
       // Sync play/pause
       if (playerState.isPlaying !== data.isPlaying) {
         actions.setPlayingState(data.isPlaying)
       }
 
-      // Sync progress if drift exceeds the configurable threshold
+      // Sync progress if drift exceeds the configurable threshold, once the
+      // song can play. Seeking a song that's still loading restarts the
+      // load, and the host's next update (every second) would do it again,
+      // so the guest would sit at 0:00.
       const { syncThreshold } = useJamStore.getState()
       const audio = playerState.audioPlayerRef
-      if (audio) {
+      // The Android player and the desktop lane stand in for an element and
+      // report these the same way.
+      const ready =
+        !!audio &&
+        audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA &&
+        !audio.seeking
+      if (
+        audio &&
+        !songChanged &&
+        ready &&
+        Date.now() - this.lastSyncSeek > SYNC_SEEK_SETTLE_MS
+      ) {
         const drift = Math.abs(audio.currentTime - data.progress)
         if (drift > syncThreshold) {
           audio.currentTime = data.progress
+          this.lastSyncSeek = Date.now()
         }
       }
     } finally {

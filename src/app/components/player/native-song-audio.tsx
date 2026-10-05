@@ -53,8 +53,13 @@ type Clock = {
   positionMs: number
   durationMs: number
   playing: boolean
+  /** The native player has the track buffered (not loading). */
+  ready: boolean
   at: number
 }
+
+// ExoPlayer's Player.STATE_READY.
+const STATE_READY = 3
 
 // Ignore position reports this long after a seek (they can predate it),
 // unless they already show the new position.
@@ -115,6 +120,7 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
     positionMs: 0,
     durationMs: -1,
     playing: false,
+    ready: false,
     at: 0,
   })
   const seekGuard = useRef({ until: 0, targetMs: 0 })
@@ -174,6 +180,7 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
       positionMs,
       durationMs: -1,
       playing: clock.current.playing,
+      ready: false,
       at: performance.now(),
     }
   }, [])
@@ -213,6 +220,7 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
           positionMs: data.positionMs,
           durationMs: data.durationMs,
           playing: data.playing,
+          ready: data.state === STATE_READY,
           at: now,
         }
         setProgress(Math.floor(data.positionMs / 1000))
@@ -488,6 +496,17 @@ function createElementShim(
     get duration() {
       const { durationMs } = clock.current
       return durationMs > 0 ? durationMs / 1000 : Number.NaN
+    },
+    // As an element reports it: whether the track can play yet. Jam's sync
+    // waits for this before correcting the position, since every seek
+    // makes the native player load the track again.
+    get readyState() {
+      return clock.current.ready
+        ? HTMLMediaElement.HAVE_ENOUGH_DATA
+        : HTMLMediaElement.HAVE_NOTHING
+    },
+    get seeking() {
+      return performance.now() < seekGuard.current.until
     },
     get paused() {
       return !usePlayerStore.getState().playerState.isPlaying
