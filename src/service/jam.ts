@@ -141,7 +141,14 @@ class JamService {
     })
 
     this.socket.on('participants_update', (participants) => {
+      const before = useJamStore.getState().participants.length
       setParticipants(participants)
+      // Someone joined: the host sends where it is now (queue included), so
+      // they catch up without waiting for the next change.
+      if (useJamStore.getState().isLead && participants.length > before) {
+        this.lastSentQueue = null
+        this.emitPlaybackState()
+      }
     })
 
     this.socket.on(

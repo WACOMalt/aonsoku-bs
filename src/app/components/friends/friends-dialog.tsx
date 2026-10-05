@@ -69,7 +69,7 @@ export function FriendsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-md max-h-[85dvh] overflow-y-auto">
+      <DialogContent className="max-w-md max-h-[85dvh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Friends</DialogTitle>
           <DialogDescription>
@@ -107,7 +107,7 @@ function FriendsPanel() {
   }
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 min-w-0">
       <AddFriend />
 
       {incoming.length > 0 && (
@@ -293,7 +293,10 @@ function FriendRow({ friend }: { friend: IFriend }) {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => removeFriend(friend.username)}>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => removeFriend(friend.username)}
+            >
               Remove
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -317,9 +320,9 @@ function statusOf(friend: IFriend) {
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
+    <section className="flex flex-col gap-2 min-w-0">
       <h3 className="text-sm font-semibold">{title}</h3>
-      <div className="flex flex-col gap-2">{children}</div>
+      <div className="flex flex-col gap-2 min-w-0">{children}</div>
     </section>
   )
 }
