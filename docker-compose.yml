@@ -16,3 +16,8 @@ services:
       # Navidrome server the Jam / Connect sync server verifies logins against.
       # Falls back to SERVER_URL when unset.
       - NAVIDROME_URL=${NAVIDROME_URL:-}
+      # Where the sync server keeps friends (see the volume below).
+      - SYNC_DATA_DIR=/data
+    volumes:
+      # Friends, invites and friend settings, kept across rebuilds.
+      - ./data/sync:/data

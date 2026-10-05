@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { createFriends } = require('./friends');
 
 // The Navidrome (Subsonic) server whose accounts may use this sync server.
 // It must come from server configuration: letting the client name the
@@ -161,6 +162,42 @@ function emitJamStatus(key) {
 // After a change to a Jam: its participants (and anyone who just left).
 function emitJamStatusForUsers(names) {
   for (const key of new Set(names.map(userKey))) emitJamStatus(key)
+  friends.onJamChange(names)
+}
+
+// Friends (see friends.js), kept on disk in SYNC_DATA_DIR.
+const friends = createFriends({
+  io,
+  privateSessions,
+  jamStatusFor,
+  isRemovedFromJam: (sessionId, key) => !!jamSessions[sessionId]?.removed?.has(key),
+  dataDir: process.env.SYNC_DATA_DIR || require('path').join(__dirname, 'data'),
+})
+
+/**
+ * Removes a user from a Jam (the host's call): all of their sockets leave
+ * the room, and they cannot come back into this Jam.
+ */
+function kickFromJam(sessionId, targetKey) {
+  const jam = jamSessions[sessionId]
+  if (!jam || targetKey === jam.host) return
+  const removed = jam.participants.filter(p => userKey(p.name) === targetKey)
+  if (removed.length === 0) return
+  jam.removed = jam.removed || new Set()
+  jam.removed.add(targetKey)
+  jam.participants = jam.participants.filter(p => userKey(p.name) !== targetKey)
+  for (const p of removed) {
+    const target = io.sockets.sockets.get(p.id)
+    if (target) {
+      target.emit('jam_removed')
+      target.leave(sessionId)
+      delete socketMeta[p.id]
+      target.disconnect(true)
+    }
+  }
+  io.to(sessionId).emit('participants_update', jam.participants)
+  emitJamStatusForUsers([removed[0].name, ...jam.participants.map(p => p.name)])
+  console.log(`[Jam] ${targetKey} was removed from ${sessionId}`)
 }
 
 function isActiveDevice(session, device) {
@@ -256,6 +293,8 @@ io.on('connection', (socket) => {
     console.log(`[Connect] ${username} connected device "${device.name}" (Active: ${isActive})`);
 
     socket.emit('jam_status', jamStatusFor(key));
+    friends.onConnect(key, username, socket);
+    friends.attach(socket, key);
 
     // ── Private Session Events ──
 
@@ -272,6 +311,7 @@ io.on('connection', (socket) => {
             io.to(sid).emit('sync_playback', data);
           }
         }
+        friends.onPlayback(key);
       }
     });
 
@@ -295,6 +335,7 @@ io.on('connection', (socket) => {
       }
       io.to(targetDeviceId).emit('become_active_player', claimingForSelf ? null : privateSession.playbackState);
       emitDevicesUpdate(key);
+      friends.onPlayback(key);
     });
 
     socket.on('remote_command', ({ command, args } = {}) => {
@@ -311,7 +352,7 @@ io.on('connection', (socket) => {
 
     // Leave or end the user's Jam, or change guest control, from any of
     // their devices, including ones not in the Jam's room.
-    socket.on('jam_control', ({ action, canControl } = {}) => {
+    socket.on('jam_control', ({ action, canControl, username: target } = {}) => {
       const status = jamStatusFor(key);
       if (!status) return;
       const jam = jamSessions[status.id];
@@ -323,6 +364,8 @@ io.on('connection', (socket) => {
         emitJamStatusForUsers(names);
       } else if (action === 'leave') {
         for (const sid of status.sockets) io.to(sid).emit('jam_leave_request');
+      } else if (action === 'kick' && jam.host === key && typeof target === 'string') {
+        kickFromJam(status.id, userKey(target));
       } else if (action === 'guest_control' && jam.host === key) {
         jam.canGuestsControl = !!canControl;
         io.to(status.id).emit('guest_control_update', { canGuestsControl: jam.canGuestsControl });
@@ -368,6 +411,7 @@ io.on('connection', (socket) => {
       }
 
       delete socketMeta[socket.id];
+      if (leaving) friends.onDisconnect(key);
       console.log(`[Connect] ${username} device "${leaving?.name ?? 'replaced'}" disconnected: ${reason}`);
     });
 
@@ -382,6 +426,12 @@ io.on('connection', (socket) => {
       // An invite link to a Jam that has ended must not quietly start a new
       // session with the invitee as its host.
       socket.emit('jam_error', { code: 'session_not_found' });
+      return socket.disconnect(true);
+    }
+
+    // Removed by the host: not back into this Jam.
+    if (jamSessions[sessionId]?.removed?.has(userKey(username))) {
+      socket.emit('jam_error', { code: 'removed' });
       return socket.disconnect(true);
     }
 
@@ -424,6 +474,17 @@ io.on('connection', (socket) => {
     }
 
     console.log(`[Jam] ${username} joined session ${sessionId} (Lead: ${isLead})`);
+
+    // A friend is waiting to join this Jam: it is open now.
+    if (isLead) friends.onJamOpened(sessionId, userKey(username));
+
+    // The host removes someone (also possible from any of the host's devices
+    // through jam_control).
+    socket.on('jam_kick', ({ username: target } = {}) => {
+      const session = jamSessions[sessionId];
+      if (!session || session.host !== userKey(username) || typeof target !== 'string') return;
+      kickFromJam(sessionId, userKey(target));
+    });
 
     socket.on('playback_update', (data) => {
       const session = jamSessions[sessionId];
@@ -520,6 +581,7 @@ function clearControl(username) {
     }
   }
   emitDevicesUpdate(username)
+  friends.onPlayback(username)
 }
 
 // Safety net: drop device entries whose socket is gone without a disconnect
@@ -537,6 +599,7 @@ setInterval(() => {
     if (session.devices.size === 0) {
       clearTimeout(session.releaseTimer)
       delete privateSessions[username]
+      friends.onDisconnect(username)
     } else if (changed) {
       emitDevicesUpdate(username)
     }
