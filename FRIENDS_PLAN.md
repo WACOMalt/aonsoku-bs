@@ -1,6 +1,6 @@
 # Friends and Android self-update: implementation plan
 
-Status: approved in principle. Nothing is built yet. Work happens on a `friends` branch.
+Status: built and tested on the `friends` branch.
 
 Two features ship together in one release: **Friends** (parts 1–2) and **Android self-update** (part 3).
 
@@ -117,7 +117,7 @@ If the friend's app doesn't respond in about 10 seconds (asleep, or the network 
 ### What you get
 
 - The Android app notices when a newer release is on GitHub and shows the same **Update available** dialog the desktop app uses, with the release notes.
-- **Update** downloads the new APK with a progress bar, then opens Android's installer. You tap **Update** there once, and the app restarts on the new version with your data intact.
+- **Install update** downloads the new APK with a progress bar, then opens Android's installer. You tap **Update** there once. Android closes the app to update it; open it again and it's on the new version, with your data intact.
 - **Remind me later** hides it until the next app start, as on desktop.
 
 ### How it works

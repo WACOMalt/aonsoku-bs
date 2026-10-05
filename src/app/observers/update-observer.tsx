@@ -87,7 +87,7 @@ export function UpdateObserver() {
       })
       toast.update('update', {
         render: isAndroid
-          ? 'Downloaded. Confirm the update in the installer.'
+          ? 'Downloaded. Confirm the update, then open Aonsoku again.'
           : t('update.toasts.success'),
         type: 'success',
         autoClose: 5000,
@@ -144,7 +144,7 @@ export function UpdateObserver() {
             To update, allow Aonsoku to install apps. Tap{' '}
             <strong>Open setting</strong>, turn on{' '}
             <strong>Allow from this source</strong>, come back, then tap{' '}
-            <strong>{t('update.dialog.install')}</strong> again.
+            <strong>Install update</strong> again.
           </p>
         )}
 
@@ -171,6 +171,9 @@ export function UpdateObserver() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : needsPermission ? (
                   'Open setting'
+                ) : isAndroid ? (
+                  // Android closes the app to update it; it isn't reopened.
+                  'Install update'
                 ) : (
                   t('update.dialog.install')
                 )}
