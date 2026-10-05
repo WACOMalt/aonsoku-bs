@@ -13,7 +13,7 @@ export interface IJamLeadState {
 
 /** Why this listener's Jam ended, and whether a pre-Jam queue can be restored. */
 export interface IJamEndPrompt {
-  reason: 'host-ended' | 'left' | 'ended' | 'expired'
+  reason: 'host-ended' | 'left' | 'ended' | 'expired' | 'removed'
   canRestore: boolean
 }
 

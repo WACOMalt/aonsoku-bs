@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client'
+import { attachFriends, detachFriends } from '@/service/friends'
 import { useAppStore } from '@/store/app.store'
 import { useConnectStore } from '@/store/connect.store'
 import { IAccountJam, useJamStore } from '@/store/jam.store'
@@ -107,6 +108,7 @@ class ConnectService {
       auth,
     })
     this.socket = socket
+    attachFriends(socket)
 
     socket.on('connect', () => {
       // A socket that has since been replaced must not touch state.
@@ -304,6 +306,7 @@ class ConnectService {
 
   disconnect() {
     this.stopHeartbeat()
+    detachFriends()
     this.claimOnConnect = false
     this.endPassiveHold()
     if (this.awaitingOnline) clearTimeout(this.awaitingOnline.timer)

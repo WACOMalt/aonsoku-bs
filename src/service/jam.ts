@@ -169,7 +169,7 @@ class JamService {
     )
 
     this.socket.on('jam_error', ({ code }: { code: string }) => {
-      if (code !== 'session_not_found') return
+      if (code !== 'session_not_found' && code !== 'removed') return
       this.socket?.removeAllListeners()
       this.socket?.disconnect()
       this.socket = null
@@ -177,7 +177,16 @@ class JamService {
       // Nothing played yet in this Jam, so a snapshot saved for it is moot.
       if (!this.keepSnapshot) clearJamSnapshot()
       this.keepSnapshot = false
-      this.finishJam('expired')
+      this.finishJam(code === 'removed' ? 'removed' : 'expired')
+    })
+
+    // The host removed this listener.
+    this.socket.on('jam_removed', () => {
+      this.socket?.removeAllListeners()
+      this.socket?.disconnect()
+      this.socket = null
+      useJamStore.getState().actions.reset()
+      this.finishJam('removed')
     })
 
     this.socket.on('session_ended', () => {
@@ -251,7 +260,9 @@ class JamService {
    * Offers to restore what was playing before the Jam, when there is
    * something to restore. Otherwise just tells a guest the host ended it.
    */
-  private finishJam(reason: 'host-ended' | 'left' | 'ended' | 'expired') {
+  private finishJam(
+    reason: 'host-ended' | 'left' | 'ended' | 'expired' | 'removed',
+  ) {
     this.lastSentQueue = null
     const canRestore = loadJamSnapshot() !== null
     if (!canRestore) clearJamSnapshot()
@@ -359,8 +370,11 @@ class JamService {
     }
   }
 
-  createSession() {
-    const sessionId = createSessionId()
+  /**
+   * Starts a Jam with this listener as host. A friend joining asks for one
+   * with a given id (see service/friends.ts).
+   */
+  createSession(sessionId = createSessionId()) {
     this.keepSnapshot = false
     saveJamSnapshot()
     useJamStore.getState().actions.setSession(sessionId, true)

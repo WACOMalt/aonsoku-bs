@@ -1,6 +1,7 @@
 import { memo } from 'react'
 import CommandMenu from '@/app/components/command/command-menu'
 import { MainDrawerPage } from '@/app/components/drawer/page'
+import { FriendsDialog } from '@/app/components/friends/friends-dialog'
 import { FullscreenMode } from '@/app/components/fullscreen/page'
 import { MobileBottomNav } from '@/app/components/mobile/bottom-nav'
 import { JamEndPrompt } from '@/app/components/player/jam-end-prompt'
@@ -53,6 +54,7 @@ export default function BaseLayout() {
       <JamJoinPrompt />
       <JamEndPrompt />
       <OnlineChoicePrompt />
+      <FriendsDialog />
       {/* Search: one dialog, opened from the sidebar, tab bar or shortcut. */}
       <CommandMenu />
     </div>

@@ -14,6 +14,7 @@ import { SimpleTooltip } from '@/app/components/ui/simple-tooltip'
 import { Slider } from '@/app/components/ui/slider'
 import { Switch } from '@/app/components/ui/switch'
 import { connectService } from '@/service/connect'
+import { removeFromJam } from '@/service/friends'
 import { jamService } from '@/service/jam'
 import { useConnectOffline, useConnectState } from '@/store/connect.store'
 import {
@@ -193,7 +194,10 @@ export function JamButton() {
                 </h4>
                 <ul className="text-sm space-y-1">
                   {shownParticipants.map((p) => (
-                    <li key={p.id} className="flex justify-between">
+                    <li
+                      key={p.id}
+                      className="flex justify-between items-center gap-2"
+                    >
                       <span>
                         {p.name} {p.isLead === true ? '(Host)' : ''}
                       </span>
@@ -201,6 +205,16 @@ export function JamButton() {
                         <span className="text-[10px] bg-primary/20 px-1 rounded">
                           Lead
                         </span>
+                      )}
+                      {lead && !p.isLead && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 px-2 text-muted-foreground hover:text-destructive"
+                          onClick={() => removeFromJam(p.name)}
+                        >
+                          Remove
+                        </Button>
                       )}
                     </li>
                   ))}
