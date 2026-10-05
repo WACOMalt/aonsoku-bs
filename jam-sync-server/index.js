@@ -8,7 +8,17 @@ const NAVIDROME_URL = (process.env.NAVIDROME_URL || process.env.SERVER_URL || ''
   .trim()
   .replace(/\/+$/, '');
 
-const io = require('socket.io')(7548, {
+// Plain HTTP on the same port, for the admin's user sync (sync-users.js).
+// Only /jam-sync/ is proxied to this port, so this is reachable from inside
+// the container only.
+const httpServer = require('http').createServer((req, res) => {
+  if (req.method === 'POST' && req.url === '/admin/sync-users') {
+    return handleUserSync(req, res);
+  }
+  res.writeHead(404).end();
+});
+
+const io = require('socket.io')(httpServer, {
   path: '/jam-sync/socket.io',
   // Queues are sent in full whenever they change; allow long playlists.
   maxHttpBufferSize: 1e7,
@@ -605,5 +615,64 @@ setInterval(() => {
     }
   }
 }, 30000);
+
+// ── Admin: sync users from Navidrome ──
+// The admin's username and password come with the request (sync-users.js
+// asks for them) and are used once, to sign in to Navidrome's own API,
+// which is the only one that lists users. Nothing is kept.
+async function handleUserSync(req, res) {
+  const reply = (status, body) => {
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
+  };
+  let body;
+  try {
+    let raw = '';
+    for await (const chunk of req) {
+      raw += chunk;
+      if (raw.length > 10000) throw new Error('too large');
+    }
+    body = JSON.parse(raw);
+  } catch {
+    return reply(400, { error: 'bad_request' });
+  }
+  const { username, password, prune } = body || {};
+  if (typeof username !== 'string' || typeof password !== 'string') {
+    return reply(400, { error: 'bad_request' });
+  }
+  if (!NAVIDROME_URL) return reply(500, { error: 'sync_not_configured' });
+
+  try {
+    const login = await fetch(`${NAVIDROME_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!login.ok) return reply(401, { error: 'unauthorized' });
+    const session = await login.json();
+    if (!session.isAdmin) return reply(403, { error: 'not_admin' });
+
+    const list = await fetch(`${NAVIDROME_URL}/api/user?_start=0&_end=100000`, {
+      headers: { 'x-nd-authorization': `Bearer ${session.token}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!list.ok) return reply(502, { error: `navidrome_${list.status}` });
+    const users = await list.json();
+    if (!Array.isArray(users)) return reply(502, { error: 'navidrome_unexpected' });
+
+    const summary = friends.syncUsers(
+      users.map((u) => ({ id: u.id, userName: u.userName })),
+      { prune: prune === true },
+    );
+    console.log(`[Admin] ${username} synced users from Navidrome`);
+    return reply(200, { total: users.length, ...summary });
+  } catch (err) {
+    console.error('[Admin] User sync failed:', err.message);
+    return reply(502, { error: 'navidrome_unreachable' });
+  }
+}
+
+httpServer.listen(7548);
 
 console.log('Aonsoku Jam Sync Server running on port 7548');

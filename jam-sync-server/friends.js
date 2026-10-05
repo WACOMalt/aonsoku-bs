@@ -354,6 +354,77 @@ function createFriends({ io, privateSessions, jamStatusFor, isRemovedFromJam, da
     });
   }
 
+  /**
+   * Brings the known users in line with Navidrome's user list (see
+   * sync-users.js): adds new ones, follows renames (by Navidrome id, keeping
+   * friends and invites), updates spelling, and with prune removes users no
+   * longer in Navidrome. Returns what changed.
+   */
+  function syncUsers(navidromeUsers, { prune = false } = {}) {
+    const summary = { added: [], renamed: [], updated: [], removed: [] };
+    const listed = new Set();
+
+    for (const nd of navidromeUsers) {
+      if (!nd || typeof nd.userName !== 'string' || !nd.userName) continue;
+      const key = userKey(nd.userName);
+      listed.add(key);
+
+      // Renamed in Navidrome: the same id under another key.
+      const previousKey = Object.keys(data.users).find(
+        (k) => k !== key && nd.id && data.users[k].navidromeId === nd.id,
+      );
+      if (previousKey && !data.users[key]) {
+        data.users[key] = data.users[previousKey];
+        delete data.users[previousKey];
+        data.friendships = data.friendships.map(([a, b]) =>
+          [a === previousKey ? key : a, b === previousKey ? key : b].sort(),
+        );
+        for (const invite of data.invites) {
+          if (invite.from === previousKey) invite.from = key;
+          if (invite.to === previousKey) invite.to = key;
+        }
+        summary.renamed.push(`${previousKey} -> ${key}`);
+      }
+
+      const existing = data.users[key];
+      if (!existing) {
+        data.users[key] = {
+          name: nd.userName,
+          navidromeId: nd.id || null,
+          shareActivity: false,
+          allowJoin: false,
+        };
+        summary.added.push(nd.userName);
+      } else if (existing.name !== nd.userName || existing.navidromeId !== (nd.id || null)) {
+        if (existing.name !== nd.userName && !summary.renamed.some((r) => r.endsWith(key))) {
+          summary.updated.push(`${existing.name} -> ${nd.userName}`);
+        }
+        existing.name = nd.userName;
+        existing.navidromeId = nd.id || null;
+      }
+    }
+
+    if (prune) {
+      for (const key of Object.keys(data.users)) {
+        if (listed.has(key)) continue;
+        delete data.users[key];
+        data.friendships = data.friendships.filter(([a, b]) => a !== key && b !== key);
+        data.invites = data.invites.filter((i) => i.from !== key && i.to !== key);
+        summary.removed.push(key);
+      }
+    }
+
+    save();
+    // What everyone online sees may have changed (names, removed friends).
+    for (const key of Object.keys(privateSessions)) emitState(key);
+    console.log(
+      `[Friends] Synced users from Navidrome: ${summary.added.length} added, ` +
+        `${summary.renamed.length} renamed, ${summary.updated.length} updated, ` +
+        `${summary.removed.length} removed`,
+    );
+    return summary;
+  }
+
   /** Whether this user may open the Jam a friend is waiting for. */
   function isPendingHost(sessionId, key) {
     return pendingJoins.get(sessionId)?.host === key;
@@ -368,6 +439,7 @@ function createFriends({ io, privateSessions, jamStatusFor, isRemovedFromJam, da
     onJamOpened,
     isPendingHost,
     nameOf,
+    syncUsers,
   };
 }
 
