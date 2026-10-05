@@ -7,12 +7,13 @@ import { ThemeObserver } from '@/app/observers/theme-observer'
 import { ToastContainer } from '@/app/observers/toast-container'
 import { UpdateObserver } from '@/app/observers/update-observer'
 import { router } from '@/routes/router'
-import { isDesktop as isElectron, isLinux } from '@/utils/desktop'
+import { getUpdateSource } from '@/utils/appUpdate'
+import { isLinux } from '@/utils/desktop'
 
 function App() {
   return (
     <>
-      {isElectron() && <UpdateObserver />}
+      {getUpdateSource() && <UpdateObserver />}
       <MediaSessionObserver />
       <LangObserver />
       <ThemeObserver />

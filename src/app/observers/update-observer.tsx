@@ -18,20 +18,39 @@ import { Badge } from '@/app/components/ui/badge'
 import { Button } from '@/app/components/ui/button'
 import { useAppUpdate } from '@/store/app.store'
 import { getAppInfo } from '@/utils/appName'
+import { getUpdateSource, UpdateError } from '@/utils/appUpdate'
 import { isMacOS } from '@/utils/desktop'
+import { logger } from '@/utils/logger'
 import { sanitizeLinks } from '@/utils/parseTexts'
+import { getNativePlatform } from '@/utils/platform'
 import { queryKeys } from '@/utils/queryKeys'
 
+const isAndroid = getNativePlatform() === 'android'
+
+/**
+ * Offers a newer version of the app: the desktop app (electron-updater) and
+ * the Android app (from the latest GitHub release). See utils/appUpdate.ts.
+ */
 export function UpdateObserver() {
   const { t } = useTranslation()
   const { openDialog, setOpenDialog, remindOnNextBoot, setRemindOnNextBoot } =
     useAppUpdate()
   const [updateHasStarted, setUpdateHasStarted] = useState(false)
+  // Android: the app may not install apps yet; the dialog explains it.
+  const [needsPermission, setNeedsPermission] = useState(false)
+  const source = getUpdateSource()
 
-  const { data: updateCheckResult } = useQuery({
+  const { data: update } = useQuery({
     queryKey: [queryKeys.update.check],
-    queryFn: async () => await window.api.checkForUpdates(),
-    enabled: !remindOnNextBoot,
+    queryFn: async () => {
+      try {
+        return (await source?.check()) ?? null
+      } catch (error) {
+        logger.info('[Update] Could not check for updates', error)
+        return null
+      }
+    },
+    enabled: !!source && !remindOnNextBoot,
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     staleTime: Infinity,
@@ -39,45 +58,19 @@ export function UpdateObserver() {
   })
 
   useEffect(() => {
-    if (updateCheckResult?.isUpdateAvailable) {
-      setOpenDialog(true)
-    }
-  }, [setOpenDialog, updateCheckResult])
+    if (update) setOpenDialog(true)
+  }, [setOpenDialog, update])
 
-  useEffect(() => {
-    window.api.onUpdateDownloaded(() => {
-      toast.update('update', {
-        render: t('update.toasts.success'),
-        type: 'success',
-        autoClose: 5000,
-        isLoading: false,
-      })
-      window.api.quitAndInstall()
-    })
-
-    window.api.onUpdateError(() => {
-      setUpdateHasStarted(false)
-      setRemindOnNextBoot(true)
-
-      toast.update('update', {
-        render: t('update.toasts.error'),
-        type: 'error',
-        autoClose: 5000,
-        isLoading: false,
-      })
-    })
-
-    window.api.onDownloadProgress((progress) => {
-      toast.update('update', {
-        progress: progress.percent / 100,
-      })
-    })
-  }, [t, setRemindOnNextBoot])
-
-  if (!updateCheckResult || !updateCheckResult.isUpdateAvailable) return null
+  if (!source || !update) return null
 
   const handleUpdate = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (needsPermission && source.grantPermission) {
+      // Back from the setting, the next tap installs.
+      setNeedsPermission(false)
+      await source.grantPermission()
+      return
+    }
 
     toast(t('update.toasts.started'), {
       autoClose: false,
@@ -86,21 +79,39 @@ export function UpdateObserver() {
       toastId: 'update',
       progress: 0,
     })
-
     setUpdateHasStarted(true)
-    window.api.downloadUpdate()
-  }
 
-  const { updateInfo } = updateCheckResult
-
-  function getReleaseNotes() {
-    if (typeof updateInfo.releaseNotes === 'string') {
-      return updateInfo.releaseNotes
-    } else if (Array.isArray(updateInfo.releaseNotes)) {
-      return updateInfo.releaseNotes.map((note) => note.note).join('\n')
+    try {
+      await source.install((fraction) => {
+        toast.update('update', { progress: fraction })
+      })
+      toast.update('update', {
+        render: isAndroid
+          ? 'Downloaded. Confirm the update in the installer.'
+          : t('update.toasts.success'),
+        type: 'success',
+        autoClose: 5000,
+        isLoading: false,
+        progress: undefined,
+      })
+      if (isAndroid) setUpdateHasStarted(false)
+    } catch (error) {
+      setUpdateHasStarted(false)
+      if (error instanceof UpdateError && error.reason === 'needs-permission') {
+        toast.dismiss('update')
+        setNeedsPermission(true)
+        return
+      }
+      logger.error('[Update] Update failed', error)
+      setRemindOnNextBoot(true)
+      toast.update('update', {
+        render: t('update.toasts.error'),
+        type: 'error',
+        autoClose: 5000,
+        isLoading: false,
+        progress: undefined,
+      })
     }
-
-    return updateInfo.version
   }
 
   return (
@@ -113,7 +124,7 @@ export function UpdateObserver() {
           <AlertDialogTitle className="flex items-center gap-2">
             <RocketIcon className="w-6 h-6 text-primary fill-primary/60" />
             <span>{t('update.dialog.title')}</span>
-            <Badge>{updateInfo.version}</Badge>
+            <Badge>{update.version}</Badge>
           </AlertDialogTitle>
         </AlertDialogHeader>
 
@@ -123,10 +134,19 @@ export function UpdateObserver() {
         >
           <div className="space-y-2 text-sm">
             <Markdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-              {sanitizeLinks(getReleaseNotes())}
+              {sanitizeLinks(update.notes || update.version)}
             </Markdown>
           </div>
         </div>
+
+        {needsPermission && (
+          <p className="text-sm">
+            To update, allow Aonsoku to install apps. Tap{' '}
+            <strong>Open setting</strong>, turn on{' '}
+            <strong>Allow from this source</strong>, come back, then tap{' '}
+            <strong>{t('update.dialog.install')}</strong> again.
+          </p>
+        )}
 
         <AlertDialogFooter>
           <form onSubmit={handleUpdate} className="flex gap-2">
@@ -149,6 +169,8 @@ export function UpdateObserver() {
               >
                 {updateHasStarted ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
+                ) : needsPermission ? (
+                  'Open setting'
                 ) : (
                   t('update.dialog.install')
                 )}

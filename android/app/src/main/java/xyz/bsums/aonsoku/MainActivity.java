@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NavigationBarPlugin.class);
         registerPlugin(MediaSessionPlugin.class);
         registerPlugin(NativePlayerPlugin.class);
+        registerPlugin(AppUpdatePlugin.class);
         super.onCreate(savedInstanceState);
 
         // Gapless playback starts the next track on a second audio element
