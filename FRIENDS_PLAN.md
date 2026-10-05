@@ -123,10 +123,10 @@ If the friend's app doesn't respond in about 10 seconds (asleep, or the network 
 ### How it works
 
 - **Check:**
-  - At app start, and at most once every 6 hours, the app reads `https://api.github.com/repos/WACOMalt/aonsoku-bs/releases/latest`.
+  - At app start, and at most once every 15 minutes, the app reads `https://api.github.com/repos/WACOMalt/aonsoku-bs/releases/latest`.
   - It compares that release's tag (for example `v0.18.0`) with the app's own version. Drafts and pre-releases are never offered.
   - It finds the APK in the release's files by name (`Aonsoku-<version>-android.apk`).
-  - GitHub allows 60 unsigned API calls per hour per network, so 6 hours is far inside that.
+  - GitHub allows 60 unsigned API calls per hour per network, so this is far inside that.
 - **Download:**
   - A small native plugin, `AppUpdate`, downloads the APK into the app's private cache folder. It only accepts `https` links on GitHub's own hosts, and reports progress to the dialog.
   - A half-finished download is deleted, and a finished one is reused if you tap **Update** again.

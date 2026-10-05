@@ -101,9 +101,10 @@ const AppUpdate =
 
 const LATEST_RELEASE =
   'https://api.github.com/repos/WACOMalt/aonsoku-bs/releases/latest'
-// GitHub allows 60 unauthenticated requests an hour; checking this often
-// is far inside that.
-const CHECK_EVERY_MS = 6 * 60 * 60 * 1000
+// A check is reused for this long (reopening the app often), so a new
+// release shows soon after it's out. GitHub allows 60 unauthenticated
+// requests an hour; this stays far inside that.
+const CHECK_EVERY_MS = 15 * 60 * 1000
 const CHECK_KEY = 'aonsoku-android-update-check'
 
 interface AndroidRelease extends AvailableUpdate {
