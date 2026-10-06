@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Actions } from '@/app/components/actions'
+import { KeptBadge } from '@/app/components/song-cache/kept-badge'
 import {
   useIsPlaylistPlaying,
   usePlayerActions,
@@ -84,6 +85,7 @@ export function PlaylistButtons({ playlist }: PlaylistButtonsProps) {
           />
         }
       />
+      <KeptBadge kind="playlist" id={playlist.id} />
     </Actions.Container>
   )
 }

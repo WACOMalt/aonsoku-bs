@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { KeptSongIcon } from '@/app/components/song-cache/kept-badge'
 import { CoverImage } from '@/app/components/table/cover-image'
 import { SimpleTooltip } from '@/app/components/ui/simple-tooltip'
 import { cn } from '@/lib/utils'
@@ -15,11 +16,14 @@ export function TableSongTitle({ song }: { song: ISong }) {
         altText={song.title}
       />
       <div className="flex flex-col w-full justify-center truncate">
-        <SimpleTooltip text={song.title} delay={1000}>
-          <span className="block w-fit max-w-full font-medium truncate">
-            {song.title}
-          </span>
-        </SimpleTooltip>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <SimpleTooltip text={song.title} delay={1000}>
+            <span className="block w-fit max-w-full font-medium truncate">
+              {song.title}
+            </span>
+          </SimpleTooltip>
+          <KeptSongIcon songId={song.id} />
+        </div>
         <div className="flex items-center truncate">
           <TableArtists song={song} />
         </div>

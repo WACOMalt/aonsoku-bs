@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Actions } from '@/app/components/actions'
+import { KeptBadge } from '@/app/components/song-cache/kept-badge'
 import { subsonic } from '@/service/subsonic'
 import { useAppPages, useAppStore } from '@/store/app.store'
 import {
@@ -127,6 +128,7 @@ export function AlbumButtons({ album, showInfoButton }: AlbumButtonsProps) {
         tooltip={buttonsTooltips.options}
         options={<AlbumOptions album={album} />}
       />
+      <KeptBadge kind="album" id={album.id} />
     </Actions.Container>
   )
 }

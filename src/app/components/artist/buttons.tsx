@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Actions } from '@/app/components/actions'
+import { KeptBadge } from '@/app/components/song-cache/kept-badge'
 import { useSongList } from '@/app/hooks/use-song-list'
 import { subsonic } from '@/service/subsonic'
 import { useAppPages, useAppStore } from '@/store/app.store'
@@ -139,6 +140,7 @@ export function ArtistButtons({
         tooltip={buttonsTooltips.options}
         options={<ArtistOptions artist={artist} />}
       />
+      <KeptBadge kind="artist" id={artist.id} />
     </Actions.Container>
   )
 }

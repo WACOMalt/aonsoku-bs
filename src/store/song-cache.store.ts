@@ -42,6 +42,8 @@ interface ISongCacheState {
   kept: Record<string, KeptItem>
   /** Each song's state, by song ID (not saved; read from the platform). */
   states: Record<string, SongCacheState>
+  /** IDs of the songs in kept items (not saved; see kept.ts). */
+  keptSongIds: Set<string>
   setCachePlayed: (value: boolean) => void
   setLimit: (bytes: number) => void
   setWifiOnly: (value: boolean) => void
@@ -49,6 +51,7 @@ interface ISongCacheState {
   removeKept: (keptId: string) => void
   clearKept: () => void
   setStates: (states: Record<string, SongCacheState>) => void
+  setKeptSongIds: (ids: Set<string>) => void
 }
 
 export const keptId = (kind: KeptKind, id: string) => `${kind}:${id}`
@@ -61,6 +64,7 @@ export const useSongCache = create<ISongCacheState>()(
       wifiOnly: false,
       kept: {},
       states: {},
+      keptSongIds: new Set(),
       setCachePlayed: (cachePlayed) => set({ cachePlayed }),
       setLimit: (limit) => set({ limit: Math.max(0, Math.round(limit)) }),
       setWifiOnly: (wifiOnly) => set({ wifiOnly }),
@@ -77,6 +81,7 @@ export const useSongCache = create<ISongCacheState>()(
       clearKept: () => set({ kept: {} }),
       setStates: (states) =>
         set((state) => ({ states: { ...state.states, ...states } })),
+      setKeptSongIds: (keptSongIds) => set({ keptSongIds }),
     }),
     {
       name: 'song-cache',

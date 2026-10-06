@@ -221,10 +221,12 @@ export function scheduleSync() {
 }
 
 export async function syncNow() {
+  const songs = await allKeptSongs()
+  useSongCache.getState().setKeptSongIds(new Set(songs.map((song) => song.id)))
   const backend = getSongCacheBackend()
   if (!backend) return
   try {
-    await backend.syncKept(await allKeptSongs())
+    await backend.syncKept(songs)
   } catch (error) {
     logger.error('[SongCache] Could not update the kept songs', error)
   }
