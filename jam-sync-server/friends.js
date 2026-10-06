@@ -136,19 +136,28 @@ function createFriends({ io, privateSessions, jamStatusFor, isRemovedFromJam, da
 
   function stateFor(key) {
     const me = user(key) || {};
+    const myJam = jamStatusFor(key)?.id ?? null;
     return {
       settings: {
         shareActivity: !!me.shareActivity,
         allowJoin: !!me.allowJoin,
       },
       friends: friendsOf(key)
-        .map((friend) => ({
-          username: nameOf(friend),
-          online: isOnline(friend),
-          activity: isOnline(friend) ? activityOf(friend) : null,
-          joinable: isJoinable(friend),
-          inJam: isOnline(friend) && !!jamStatusFor(friend),
-        }))
+        .map((friend) => {
+          const friendJam = isOnline(friend) ? jamStatusFor(friend) : null;
+          // Already together, or removed from their Jam by its host:
+          // nothing to join.
+          const withYou = !!friendJam && friendJam.id === myJam;
+          const removed = !!friendJam && isRemovedFromJam(friendJam.id, key);
+          return {
+            username: nameOf(friend),
+            online: isOnline(friend),
+            activity: isOnline(friend) ? activityOf(friend) : null,
+            joinable: isJoinable(friend) && !withYou && !removed,
+            inJam: !!friendJam,
+            withYou,
+          };
+        })
         .sort((a, b) => a.username.localeCompare(b.username)),
       incoming: data.invites
         .filter((i) => i.to === key)
@@ -209,7 +218,11 @@ function createFriends({ io, privateSessions, jamStatusFor, isRemovedFromJam, da
 
   /** Someone joined or left a Jam: whether they are in one shows to friends. */
   function onJamChange(names) {
-    for (const key of new Set(names.map(userKey))) notifyFriendsOf(key);
+    for (const key of new Set(names.map(userKey))) {
+      notifyFriendsOf(key);
+      // Their own list too: which friends are in a Jam with them.
+      emitState(key);
+    }
   }
 
   /**
@@ -221,10 +234,12 @@ function createFriends({ io, privateSessions, jamStatusFor, isRemovedFromJam, da
     if (!pending || pending.host !== hostKey) return;
     clearTimeout(pending.timer);
     pendingJoins.delete(sessionId);
-    io.to(pending.socketId).emit('friend_join_ready', {
-      sessionId,
-      username: nameOf(pending.host),
-    });
+    for (const waiter of pending.waiters) {
+      io.to(waiter).emit('friend_join_ready', {
+        sessionId,
+        username: nameOf(pending.host),
+      });
+    }
   }
 
   // ── Events from a signed-in device ──
@@ -334,6 +349,14 @@ function createFriends({ io, privateSessions, jamStatusFor, isRemovedFromJam, da
         return reply(ack, { result: 'ready', sessionId: jam.id });
       }
 
+      // A Jam is already opening for them (another friend tapped Join): wait
+      // for that one too, rather than have their device open a second.
+      for (const [sessionId, pending] of pendingJoins) {
+        if (pending.host !== target) continue;
+        if (!pending.waiters.includes(socket.id)) pending.waiters.push(socket.id);
+        return reply(ack, { result: 'starting', sessionId });
+      }
+
       // Otherwise the friend's playing device opens a Jam for them.
       const session = privateSessions[target];
       let hostSocket = null;
@@ -344,10 +367,14 @@ function createFriends({ io, privateSessions, jamStatusFor, isRemovedFromJam, da
 
       const sessionId = crypto.randomBytes(8).toString('hex');
       const timer = setTimeout(() => {
-        if (!pendingJoins.delete(sessionId)) return;
-        io.to(socket.id).emit('friend_join_failed', { username: nameOf(target) });
+        const pending = pendingJoins.get(sessionId);
+        if (!pending) return;
+        pendingJoins.delete(sessionId);
+        for (const waiter of pending.waiters) {
+          io.to(waiter).emit('friend_join_failed', { username: nameOf(target) });
+        }
       }, JOIN_TIMEOUT_MS);
-      pendingJoins.set(sessionId, { host: target, joiner: key, socketId: socket.id, timer });
+      pendingJoins.set(sessionId, { host: target, joiner: key, waiters: [socket.id], timer });
       io.to(hostSocket).emit('friend_join_start', { sessionId, username: nameOf(key) });
       console.log(`[Friends] ${key} is joining ${target} (Jam ${sessionId})`);
       reply(ack, { result: 'starting' });

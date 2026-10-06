@@ -17,6 +17,8 @@ export interface IFriend {
   /** They allow friends to join and have something to join now. */
   joinable: boolean
   inJam: boolean
+  /** In the same Jam as this listener. */
+  withYou?: boolean
 }
 
 export interface IFriendInvite {

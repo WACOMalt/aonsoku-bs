@@ -110,6 +110,9 @@ const DURATION_TOLERANCE_SECONDS = 2
  * located, to join the next track onto it on the audio clock.
  */
 const LANE_JOIN_WINDOW_SECONDS = 8
+// If the playing element never reports it can play through, the lane starts
+// downloading after this long anyway.
+const LANE_FETCH_FALLBACK_MS = 15000
 const LANE_JOIN_ATTEMPTS = 3
 
 /** Decoded tracks take a lot of memory; only desktop-class devices use them. */
@@ -206,6 +209,9 @@ export function SongAudio({ audioRef }: SongAudioProps) {
   const onLaneRef = useRef(false)
   // Bumped when a track finishes decoding, to act on it.
   const [decodeTick, setDecodeTick] = useState(0)
+  // The track whose element has loaded enough that the lane may download
+  // (see the decode effect): the song that is playing comes first.
+  const [laneMayFetch, setLaneMayFetch] = useState<string | null>(null)
   const laneTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const laneJoin = useRef<LaneJoin | null>(null)
 
@@ -617,24 +623,45 @@ export function SongAudio({ audioRef }: SongAudioProps) {
   useEffect(() => cancelHandoff, [cancelHandoff])
 
   // Decode the next track ahead for the lane, and the current one while it
-  // plays on an element (to locate the element and join onto it).
+  // plays on an element (to locate the element and join onto it). One
+  // download at a time, after the playing song: starting all three at once
+  // (the element's stream and two full tracks) made a slow server or
+  // connection start the song late, worse with several listeners in a Jam.
   // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the tracks
   useEffect(() => {
     const lane = getLane()
     if (!lane || !song) return
     const bump = () => setDecodeTick((tick) => tick + 1)
-    const keys = [song.id]
-    if (!onLane) {
-      lane.prepare(song.id, makeSlot(song).url, song.duration).then(bump)
+    const next = nextSong && loopState !== LoopState.One ? nextSong : null
+    lane.keepOnly(next ? [song.id, next.id] : [song.id])
+    const prepareNext = () => {
+      if (next)
+        lane.prepare(next.id, makeSlot(next).url, next.duration).then(bump)
     }
-    if (nextSong && loopState !== LoopState.One) {
-      keys.push(nextSong.id)
-      lane
-        .prepare(nextSong.id, makeSlot(nextSong).url, nextSong.duration)
-        .then(bump)
+    // Already playing from memory: only the next one to download.
+    if (onLane) {
+      prepareNext()
+      return
     }
-    lane.keepOnly(keys)
-  }, [song?.id, nextSong?.id, onLane, loopState, getLane])
+    // On an element: wait until its stream has loaded enough.
+    if (laneMayFetch !== song.id) return
+    lane.prepare(song.id, makeSlot(song).url, song.duration).then(() => {
+      bump()
+      prepareNext()
+    })
+  }, [song?.id, nextSong?.id, onLane, loopState, getLane, laneMayFetch])
+
+  // The lane may download once the playing element can play through, or
+  // after a while of playing if the browser never says so.
+  const songId = song?.id
+  useEffect(() => {
+    if (!songId || !isPlaying || laneMayFetch === songId) return
+    const timer = setTimeout(
+      () => setLaneMayFetch(songId),
+      LANE_FETCH_FALLBACK_MS,
+    )
+    return () => clearTimeout(timer)
+  }, [songId, isPlaying, laneMayFetch])
 
   // The next track changed while a join onto it was scheduled.
   useEffect(() => {
@@ -929,6 +956,10 @@ export function SongAudio({ audioRef }: SongAudioProps) {
             onLoadedMetadata={(event: SyntheticEvent<HTMLAudioElement>) =>
               handleLoadedMetadata(index, event.currentTarget)
             }
+            onCanPlayThrough={() => {
+              // Loaded enough to play on: the lane may download now.
+              if (isActive(index) && song) setLaneMayFetch(song.id)
+            }}
             onTimeUpdate={(event: SyntheticEvent<HTMLAudioElement>) =>
               handleTimeUpdate(index, event.currentTarget)
             }

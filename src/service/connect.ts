@@ -598,7 +598,10 @@ class ConnectService {
     action: 'leave' | 'end' | 'guest_control',
     options: { canControl?: boolean } = {},
   ) {
-    if (!this.socket?.connected) return
+    if (!this.socket) return
+    // Ending a Jam must arrive: while reconnecting (a phone dropping off
+    // the network) it waits in the socket's buffer and goes when back.
+    if (!this.socket.connected && action !== 'end') return
     this.socket.emit('jam_control', { action, ...options })
   }
 

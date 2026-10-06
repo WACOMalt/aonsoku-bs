@@ -308,6 +308,7 @@ function FriendRow({ friend }: { friend: IFriend }) {
 
 function statusOf(friend: IFriend) {
   if (!friend.online) return 'Offline'
+  if (friend.withYou) return 'In your Jam'
   const { activity } = friend
   if (activity) {
     const what = activity.artist

@@ -1,3 +1,4 @@
+import { toast } from 'react-toastify'
 import { io, Socket } from 'socket.io-client'
 import { connectService } from '@/service/connect'
 import { useAppStore } from '@/store/app.store'
@@ -200,12 +201,20 @@ class JamService {
       this.finishJam('removed')
     })
 
-    this.socket.on('session_ended', () => {
+    this.socket.on('session_ended', (data?: { reason?: string }) => {
       // The host may have ended it from another of their devices.
       const wasLead = useJamStore.getState().isLead
       this.socket?.disconnect()
       this.socket = null
       useJamStore.getState().actions.reset()
+      if (wasLead && data?.reason === 'alone') {
+        // The last guest left: the host carries on with the Jam's queue,
+        // without being asked about the queue from before it.
+        this.lastSentQueue = null
+        clearJamSnapshot()
+        toast.info('Everyone left, so the Jam ended. Your music keeps playing.')
+        return
+      }
       this.finishJam(wasLead ? 'ended' : 'host-ended')
     })
 
@@ -256,6 +265,10 @@ class JamService {
 
   /** Ends the Jam for everyone. `silent` skips the restore prompt. */
   endSession({ silent = false }: { silent?: boolean } = {}) {
+    // Also through the account's connection: if this socket is down, its
+    // end_session would be dropped with it, leaving the guests in a Jam
+    // nobody hosts. The server ignores the second one.
+    connectService.sendJamControl('end')
     if (this.socket) {
       this.socket.emit('end_session')
       this.socket.removeAllListeners()
@@ -301,13 +314,18 @@ class JamService {
       const { actions, songlist, playerState } = usePlayerStore.getState()
       const songBefore = songlist.currentSong?.id
 
-      // Save the lead's last known state so we can re-sync guests who drift
+      // Save the lead's last known state so we can re-sync guests who drift.
+      // Updates only carry the queue when it changes, so the last one sent
+      // is kept: snapping a guest back (see init) needs it once they've
+      // picked a song from another list.
+      const leadQueue =
+        data.queue ?? useJamStore.getState().lastLeadState?.queue
       useJamStore.getState().actions.setLastLeadState({
         songId: data.songId,
         isPlaying: data.isPlaying,
         progress: data.progress,
         timestamp: data.timestamp,
-        queue: data.queue,
+        queue: leadQueue,
       })
 
       // 1. Sync Queue if provided and different
@@ -517,6 +535,7 @@ class JamService {
   /** Leaves the Jam's room without the end-of-Jam prompt or restore. */
   private leaveQuietly(end: boolean) {
     if (!this.socket) return
+    if (end) connectService.sendJamControl('end')
     this.socket.emit(end ? 'end_session' : 'leave_session')
     this.socket.removeAllListeners()
     this.socket.disconnect()

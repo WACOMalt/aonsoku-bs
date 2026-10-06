@@ -184,6 +184,87 @@ const friends = createFriends({
   dataDir: process.env.SYNC_DATA_DIR || require('path').join(__dirname, 'data'),
 })
 
+// How long a Jam waits for its host to come back (a phone dropping off the
+// network for a moment) before it ends for everyone.
+const HOST_GONE_GRACE_MS = Number(process.env.JAM_GRACE_MS) || 60000
+
+// Jams that ended recently, so a host coming back to one (after a dropped
+// connection) is told, instead of quietly starting it again alone.
+const ENDED_MEMORY_MS = 30 * 60 * 1000
+const endedSessions = new Map() // sessionId -> when it ended
+
+/**
+ * Ends a Jam for everyone in it. `reason` 'alone' tells the host the last
+ * guest left, so it carries on quietly with the Jam's queue.
+ */
+function endJam(sessionId, why, reason) {
+  const jam = jamSessions[sessionId]
+  if (!jam) return
+  clearTimeout(jam.hostGoneTimer)
+  clearTimeout(jam.aloneTimer)
+  endedSessions.set(sessionId, Date.now())
+  const names = jam.participants.map(p => p.name)
+  io.to(sessionId).emit('session_ended', reason ? { reason } : undefined)
+  delete jamSessions[sessionId]
+  emitJamStatusForUsers([jam.host, ...names])
+  console.log(`[Jam] Session ended: ${sessionId} (${why})`)
+}
+
+/** The Jam this user hosts, even with none of their devices in it now. */
+function jamHostedBy(key) {
+  for (const [id, jam] of Object.entries(jamSessions)) {
+    if (jam.host === key) return id
+  }
+  return null
+}
+
+/**
+ * After someone leaves a Jam: if its host has no device left in it, the
+ * Jam ends unless the host is back within the grace period. Without this a
+ * host whose "end" never arrived (offline at the time) left the guests in a
+ * Jam nobody hosts, which they could not leave by joining the host again.
+ */
+function checkHostPresent(sessionId) {
+  const jam = jamSessions[sessionId]
+  if (!jam) return
+  const hostHere = jam.participants.some(p => userKey(p.name) === jam.host)
+  if (hostHere) {
+    clearTimeout(jam.hostGoneTimer)
+    jam.hostGoneTimer = null
+  } else if (!jam.hostGoneTimer && jam.participants.length > 0) {
+    jam.hostGoneTimer = setTimeout(() => endJam(sessionId, 'host gone'), HOST_GONE_GRACE_MS)
+  }
+}
+
+// How long a Jam waits when its last guest's connection dropped (a phone in
+// the background) before it ends; leaving or being removed ends it at once.
+const GUESTS_GONE_GRACE_MS = Number(process.env.JAM_GRACE_MS) || 60000
+
+/**
+ * A guest left: once nobody but the host is in a Jam that had guests, it
+ * ends, and the host's music goes on with its queue. A Jam that never had a
+ * guest (the host waiting for people) is left alone.
+ */
+function checkGuestsPresent(sessionId, { immediate }) {
+  const jam = jamSessions[sessionId]
+  if (!jam || !jam.hadGuests) return
+  const guestsHere = jam.participants.some(p => userKey(p.name) !== jam.host)
+  if (guestsHere) {
+    clearTimeout(jam.aloneTimer)
+    jam.aloneTimer = null
+    return
+  }
+  if (!jam.participants.some(p => userKey(p.name) === jam.host)) return
+  if (immediate) {
+    endJam(sessionId, 'last guest left', 'alone')
+  } else if (!jam.aloneTimer) {
+    jam.aloneTimer = setTimeout(() => {
+      jam.aloneTimer = null
+      checkGuestsPresent(sessionId, { immediate: true })
+    }, GUESTS_GONE_GRACE_MS)
+  }
+}
+
 /**
  * Removes a user from a Jam (the host's call): all of their sockets leave
  * the room, and they cannot come back into this Jam.
@@ -208,6 +289,7 @@ function kickFromJam(sessionId, targetKey) {
   io.to(sessionId).emit('participants_update', jam.participants)
   emitJamStatusForUsers([removed[0].name, ...jam.participants.map(p => p.name)])
   console.log(`[Jam] ${targetKey} was removed from ${sessionId}`)
+  checkGuestsPresent(sessionId, { immediate: true })
 }
 
 function isActiveDevice(session, device) {
@@ -364,14 +446,18 @@ io.on('connection', (socket) => {
     // their devices, including ones not in the Jam's room.
     socket.on('jam_control', ({ action, canControl, username: target } = {}) => {
       const status = jamStatusFor(key);
+      // Ending works even when none of the host's devices is in the Jam's
+      // room at the moment (a phone that dropped off the network).
+      if (!status && action === 'end') {
+        const hosted = jamHostedBy(key);
+        if (hosted) endJam(hosted, 'ended by host');
+        return;
+      }
       if (!status) return;
       const jam = jamSessions[status.id];
       if (!jam) return;
       if (action === 'end' && jam.host === key) {
-        const names = jam.participants.map(p => p.name);
-        io.to(status.id).emit('session_ended');
-        delete jamSessions[status.id];
-        emitJamStatusForUsers(names);
+        endJam(status.id, 'ended by host');
       } else if (action === 'leave') {
         for (const sid of status.sockets) io.to(sid).emit('jam_leave_request');
       } else if (action === 'kick' && jam.host === key && typeof target === 'string') {
@@ -432,6 +518,13 @@ io.on('connection', (socket) => {
       return socket.disconnect();
     }
 
+    // Ended while this device was away: it isn't started again.
+    const endedAt = endedSessions.get(sessionId);
+    if (!jamSessions[sessionId] && endedAt && Date.now() - endedAt < ENDED_MEMORY_MS) {
+      socket.emit('session_ended');
+      return socket.disconnect(true);
+    }
+
     if (!jamSessions[sessionId] && mode === 'join') {
       // An invite link to a Jam that has ended must not quietly start a new
       // session with the invitee as its host.
@@ -487,6 +580,9 @@ io.on('connection', (socket) => {
 
     // A friend is waiting to join this Jam: it is open now.
     if (isLead) friends.onJamOpened(sessionId, userKey(username));
+    else jamSessions[sessionId].hadGuests = true;
+    checkHostPresent(sessionId);
+    checkGuestsPresent(sessionId, { immediate: false });
 
     // The host removes someone (also possible from any of the host's devices
     // through jam_control).
@@ -514,9 +610,13 @@ io.on('connection', (socket) => {
         session.participants = session.participants.filter(p => p.id !== socket.id);
         const names = [username, ...session.participants.map(p => p.name)];
         if (session.participants.length === 0) {
+          clearTimeout(session.hostGoneTimer);
+          clearTimeout(session.aloneTimer);
           delete jamSessions[sessionId];
         } else {
           io.to(sessionId).emit('participants_update', session.participants);
+          checkHostPresent(sessionId);
+          checkGuestsPresent(sessionId, { immediate: true });
         }
         emitJamStatusForUsers(names);
       }
@@ -540,10 +640,7 @@ io.on('connection', (socket) => {
       if (!session) return;
       const sender = session.participants.find(p => p.id === socket.id);
       if (!sender || !sender.isLead) return;
-      const names = session.participants.map(p => p.name);
-      io.to(sessionId).emit('session_ended');
-      delete jamSessions[sessionId];
-      emitJamStatusForUsers(names);
+      endJam(sessionId, 'ended by host');
       delete socketMeta[socket.id];
       socket.disconnect(true);
     });
@@ -555,9 +652,15 @@ io.on('connection', (socket) => {
 
         if (jamSessions[sessionId].participants.length === 0) {
           console.log(`[Jam] Session ended: ${sessionId}`);
+          clearTimeout(jamSessions[sessionId].hostGoneTimer);
+          clearTimeout(jamSessions[sessionId].aloneTimer);
           delete jamSessions[sessionId];
         } else {
           io.to(sessionId).emit('participants_update', jamSessions[sessionId].participants);
+          // The host's last device dropped: wait a moment for it, then end.
+          checkHostPresent(sessionId);
+          // Likewise the last guest's.
+          checkGuestsPresent(sessionId, { immediate: false });
         }
         emitJamStatusForUsers(names);
       }
@@ -598,6 +701,9 @@ function clearControl(username) {
 // event. Sockets that are still connected stay, whatever their heartbeat;
 // Socket.IO's own ping already closes dead ones.
 setInterval(() => {
+  for (const [id, at] of endedSessions) {
+    if (Date.now() - at > ENDED_MEMORY_MS) endedSessions.delete(id)
+  }
   for (const [username, session] of Object.entries(privateSessions)) {
     let changed = false
     for (const [sid] of session.devices) {
