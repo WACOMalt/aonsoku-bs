@@ -54,6 +54,7 @@ export default function OpenSharedItem({ type }: OpenSharedItemProps) {
         cancelled = true
       }
     }
+    return undefined
   }, [type, itemId, navigate, t])
 
   return null
