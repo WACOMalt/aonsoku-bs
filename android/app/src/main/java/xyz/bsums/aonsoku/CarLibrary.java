@@ -594,6 +594,8 @@ final class CarLibrary {
         return new MediaItem.Builder()
             .setMediaId(mediaId)
             .setUri(server.streamUrl(song.optString("id"), song.optString("suffix", null)))
+            // Where the song is kept on the device (see MediaCache).
+            .setCustomCacheKey(MediaCache.keyFor(song))
             .setMediaMetadata(metadata.build())
             .build();
     }

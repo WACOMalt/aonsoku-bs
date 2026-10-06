@@ -11,8 +11,6 @@ import androidx.media3.common.C;
 import androidx.media3.common.MediaItem;
 import androidx.media3.common.Player;
 import androidx.media3.common.util.UnstableApi;
-import androidx.media3.datasource.DefaultDataSource;
-import androidx.media3.datasource.DefaultHttpDataSource;
 import androidx.media3.exoplayer.ExoPlayer;
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory;
 
@@ -84,11 +82,10 @@ final class PlaybackEngine {
     static ExoPlayer get(Context context) {
         if (player == null) {
             Context app = context.getApplicationContext();
-            DefaultHttpDataSource.Factory http = new DefaultHttpDataSource.Factory()
-                .setAllowCrossProtocolRedirects(true);
+            MediaCache cache = MediaCache.get(app);
             player = new ExoPlayer.Builder(app)
-                .setMediaSourceFactory(
-                    new DefaultMediaSourceFactory(new DefaultDataSource.Factory(app, http)))
+                // Songs on the device first (see MediaCache), then the server.
+                .setMediaSourceFactory(new DefaultMediaSourceFactory(cache.playbackSource()))
                 .setAudioAttributes(
                     new AudioAttributes.Builder()
                         .setUsage(C.USAGE_MEDIA)
@@ -107,6 +104,11 @@ final class PlaybackEngine {
                 @Override
                 public void onMediaItemTransition(MediaItem item, int reason) {
                     applyVolume();
+                }
+
+                @Override
+                public void onPlaybackStateChanged(int state) {
+                    cache.setPlaybackLoading(state == Player.STATE_BUFFERING);
                 }
             });
         }

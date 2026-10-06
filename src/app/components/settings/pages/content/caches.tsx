@@ -26,8 +26,6 @@ export function CachesContent() {
     setImagesCacheLayerEnabled,
     lyricsCacheEnabled,
     setLyricsCacheEnabled,
-    mediaCacheEnabled,
-    setMediaCacheEnabled,
   } = useAppCaches()
   const [isClearing, setIsClearing] = useState(false)
 
@@ -74,17 +72,6 @@ export function CachesContent() {
             <Switch
               checked={lyricsCacheEnabled}
               onCheckedChange={setLyricsCacheEnabled}
-            />
-          </ContentItemForm>
-        </ContentItem>
-        <ContentItem>
-          <ContentItemTitle info={t('settings.content.caches.media.info')}>
-            {t('settings.content.caches.media.label')}
-          </ContentItemTitle>
-          <ContentItemForm>
-            <Switch
-              checked={mediaCacheEnabled}
-              onCheckedChange={setMediaCacheEnabled}
             />
           </ContentItemForm>
         </ContentItem>

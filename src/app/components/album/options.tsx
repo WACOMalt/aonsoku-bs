@@ -1,5 +1,6 @@
 import { OptionsButtons } from '@/app/components/options/buttons'
 import { DownloadOptionHandler } from '@/app/components/options/download-handler'
+import { KeepCachedOption } from '@/app/components/options/keep-cached-option'
 import { AddToPlaylistSubMenu } from '@/app/components/song/add-to-playlist'
 import {
   DropdownMenuGroup,
@@ -33,7 +34,7 @@ export function AlbumOptions({ album }: AlbumOptionsProps) {
   }
 
   function handleDownload() {
-    startDownload(album.id)
+    startDownload(album.id, `${album.name}.zip`)
   }
 
   function handleAddToPlaylist(id: string) {
@@ -76,6 +77,7 @@ export function AlbumOptions({ album }: AlbumOptionsProps) {
       <DownloadOptionHandler>
         <OptionsButtons.Download onClick={handleDownload} />
       </DownloadOptionHandler>
+      <KeepCachedOption kind="album" id={album.id} />
       <DropdownMenuSeparator />
       <OptionsButtons.Share onClick={handleShare} />
     </>

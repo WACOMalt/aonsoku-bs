@@ -4,6 +4,7 @@ import { FeatureContent } from './features'
 import { HomeContent } from './home'
 import { PodcastContent } from './podcast'
 import { SidebarContent } from './sidebar'
+import { SongsCacheContent } from './songs-cache'
 import { SyncServerContent } from './sync-server'
 import { UpdatesContent } from './updates'
 
@@ -15,6 +16,7 @@ export function Content() {
       <FeatureContent />
       <PodcastContent />
       <SyncServerContent />
+      <SongsCacheContent />
       <CachesContent />
       {getUpdateSource() && <UpdatesContent />}
     </div>

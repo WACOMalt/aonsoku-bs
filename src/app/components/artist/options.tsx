@@ -1,5 +1,6 @@
 import { OptionsButtons } from '@/app/components/options/buttons'
 import { DownloadOptionHandler } from '@/app/components/options/download-handler'
+import { KeepCachedOption } from '@/app/components/options/keep-cached-option'
 import {
   DropdownMenuGroup,
   DropdownMenuSeparator,
@@ -34,7 +35,7 @@ export function ArtistOptions({ artist }: ArtistOptionsProps) {
   }
 
   function handleDownload() {
-    startDownload(artist.id)
+    startDownload(artist.id, `${artist.name}.zip`)
   }
 
   function handleShare() {
@@ -49,6 +50,7 @@ export function ArtistOptions({ artist }: ArtistOptionsProps) {
         <DownloadOptionHandler group={false}>
           <OptionsButtons.Download onClick={handleDownload} />
         </DownloadOptionHandler>
+        <KeepCachedOption kind="artist" id={artist.id} />
       </DropdownMenuGroup>
       <DropdownMenuSeparator />
       <OptionsButtons.Share onClick={handleShare} />

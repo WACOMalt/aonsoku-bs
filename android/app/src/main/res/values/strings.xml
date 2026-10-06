@@ -4,4 +4,6 @@
     <string name="title_activity_main">Aonsoku</string>
     <string name="package_name">xyz.bsums.aonsoku</string>
     <string name="custom_url_scheme">xyz.bsums.aonsoku</string>
+    <string name="kept_channel_name">Kept songs</string>
+    <string name="kept_channel_description">Downloads of the songs you keep on this device</string>
 </resources>

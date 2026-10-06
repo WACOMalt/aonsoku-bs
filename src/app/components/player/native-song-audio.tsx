@@ -8,7 +8,6 @@ import {
 import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
 import { getSimpleCoverArtUrl, getSongStreamUrl } from '@/api/httpClient'
-import { useAppMediaCache } from '@/store/app.store'
 import { useCarStore } from '@/store/car.store'
 import {
   getVolume,
@@ -19,6 +18,7 @@ import {
   usePlayerStore,
   useReplayGainState,
 } from '@/store/player.store'
+import { useSongCache } from '@/store/song-cache.store'
 import { LoopState } from '@/types/playerContext'
 import { ISong } from '@/types/responses/song'
 import { ensureSupportForAlac } from '@/utils/alac'
@@ -86,7 +86,8 @@ export function NativeSongAudio({ audioRef }: NativeSongAudioProps) {
   const { currentList, currentSongIndex } = usePlayerSonglist()
   const isPlaying = usePlayerIsPlaying()
   const loopState = usePlayerLoop()
-  const mediaCacheEnabled = useAppMediaCache()
+  // Off, the address changes each time, so nothing caches it on the way.
+  const mediaCacheEnabled = useSongCache((state) => state.cachePlayed)
   const {
     replayGainEnabled,
     replayGainError,

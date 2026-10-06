@@ -548,6 +548,8 @@ public class NativePlayerPlugin extends Plugin {
         return new MediaItem.Builder()
             .setMediaId(item.getString("key", ""))
             .setUri(item.getString("url", ""))
+            // Where the song is kept on the device (see MediaCache).
+            .setCustomCacheKey(MediaCache.keyFor(song))
             .setMediaMetadata(metadata.build())
             .build();
     }

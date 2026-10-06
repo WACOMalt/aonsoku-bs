@@ -2,6 +2,8 @@ import omit from 'lodash/omit'
 import {
   CheckIcon,
   DownloadIcon,
+  HardDrive,
+  HardDriveDownload,
   Info,
   ListEnd,
   ListPlus,
@@ -71,6 +73,28 @@ function Download({ variant = 'dropdown', ...props }: DropdownMenuItemProps) {
       variant={variant}
       icon={<DownloadIcon className="mr-2 h-4 w-4" />}
       label={t('options.download')}
+      {...props}
+    />
+  )
+}
+
+/** Keep cached on this device, or stop keeping it (see song-cache/kept.ts). */
+function KeepCached({
+  variant = 'dropdown',
+  kept,
+  ...props
+}: DropdownMenuItemProps & { kept: boolean }) {
+  return (
+    <MenuItemFactory
+      variant={variant}
+      icon={
+        kept ? (
+          <HardDrive className="mr-2 h-4 w-4" />
+        ) : (
+          <HardDriveDownload className="mr-2 h-4 w-4" />
+        )
+      }
+      label={kept ? 'Remove from cache' : 'Keep cached'}
       {...props}
     />
   )
@@ -214,6 +238,7 @@ export const OptionsButtons = {
   PlayNext,
   PlayLast,
   Download,
+  KeepCached,
   AddToPlaylistOption,
   EditPlaylist,
   RemovePlaylist,

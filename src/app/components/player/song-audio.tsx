@@ -13,7 +13,6 @@ import {
   cutElementAt,
   resetElementFade,
 } from '@/app/hooks/use-audio-context'
-import { useAppMediaCache } from '@/store/app.store'
 import {
   isPassiveConnectDevice,
   useCanOutputAudio,
@@ -28,6 +27,7 @@ import {
   usePlayerStore,
   useReplayGainState,
 } from '@/store/player.store'
+import { useSongCache } from '@/store/song-cache.store'
 import { LoopState } from '@/types/playerContext'
 import { ISong } from '@/types/responses/song'
 import { ensureSupportForAlac } from '@/utils/alac'
@@ -160,7 +160,8 @@ export function SongAudio({ audioRef }: SongAudioProps) {
   const isPlaying = usePlayerIsPlaying()
   const loopState = usePlayerLoop()
   const { enabled: gaplessEnabled } = useGaplessSettings()
-  const mediaCacheEnabled = useAppMediaCache()
+  // Off, the address changes each time, so nothing caches it on the way.
+  const mediaCacheEnabled = useSongCache((state) => state.cachePlayed)
   const {
     replayGainEnabled,
     replayGainError,

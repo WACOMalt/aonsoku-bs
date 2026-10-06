@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { OptionsButtons } from '@/app/components/options/buttons'
 import { DownloadOptionHandler } from '@/app/components/options/download-handler'
+import { KeepCachedOption } from '@/app/components/options/keep-cached-option'
 import { DropdownMenuSeparator } from '@/app/components/ui/dropdown-menu'
 import { useOptions } from '@/app/hooks/use-options'
 import { subsonic } from '@/service/subsonic'
@@ -99,7 +100,7 @@ export function PlaylistOptions({
   }
 
   function handleDownload() {
-    startDownload(playlist.id)
+    startDownload(playlist.id, `${playlist.name}.zip`)
   }
 
   return (
@@ -149,6 +150,7 @@ export function PlaylistOptions({
           }}
         />
       </DownloadOptionHandler>
+      <KeepCachedOption kind="playlist" id={playlist.id} variant={variant} />
       <OptionsButtons.Share
         variant={variant}
         onClick={(e) => {

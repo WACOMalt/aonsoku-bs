@@ -14,6 +14,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(MediaSessionPlugin.class);
         registerPlugin(NativePlayerPlugin.class);
         registerPlugin(AppUpdatePlugin.class);
+        registerPlugin(MediaCachePlugin.class);
+        // The song cache's download manager runs on the main thread.
+        MediaCache.get(this);
         super.onCreate(savedInstanceState);
 
         // Gapless playback starts the next track on a second audio element

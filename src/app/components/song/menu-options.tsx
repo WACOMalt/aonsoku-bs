@@ -1,7 +1,8 @@
 import { OptionsButtons } from '@/app/components/options/buttons'
 import { DownloadOptionHandler } from '@/app/components/options/download-handler'
+import { KeepCachedOption } from '@/app/components/options/keep-cached-option'
 import { ContextMenuSeparator } from '@/app/components/ui/context-menu'
-import { useOptions } from '@/app/hooks/use-options'
+import { songFileName, useOptions } from '@/app/hooks/use-options'
 import { useAppStore } from '@/store/app.store'
 import { ISong } from '@/types/responses/song'
 import { shareItem } from '@/utils/shareLinks'
@@ -73,10 +74,16 @@ export function SongMenuOptions({
           variant={variant}
           onClick={(e) => {
             e.stopPropagation()
-            startDownload(song.id)
+            startDownload(song.id, songFileName(song))
           }}
         />
       </DownloadOptionHandler>
+      <KeepCachedOption
+        kind="song"
+        id={song.id}
+        song={song}
+        variant={variant}
+      />
       <ContextMenuSeparator />
       <OptionsButtons.Share
         variant={variant}

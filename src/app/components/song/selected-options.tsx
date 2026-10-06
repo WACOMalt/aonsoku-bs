@@ -7,7 +7,10 @@ import {
   ContextMenuSeparator,
 } from '@/app/components/ui/context-menu'
 import { useOptions } from '@/app/hooks/use-options'
+import { getSongCacheBackend } from '@/service/song-cache/backend'
+import { keepSongs, release } from '@/service/song-cache/kept'
 import { useAppStore } from '@/store/app.store'
+import { keptId, useSongCache } from '@/store/song-cache.store'
 import { ISong } from '@/types/responses/song'
 import { shareItem } from '@/utils/shareLinks'
 import { AddToPlaylistSubMenu } from './add-to-playlist'
@@ -25,6 +28,9 @@ export function SelectedSongsMenuOptions({ table }: SelectedSongsProps) {
   const isSingleSelected = rows.length === 1
   const songs = rows.map((row) => row.original)
   const firstSong = songs[0]
+  const allKept = useSongCache((state) =>
+    songs.every((song) => !!state.kept[keptId('song', song.id)]),
+  )
 
   function reset(action: () => void) {
     action()
@@ -40,9 +46,14 @@ export function SelectedSongsMenuOptions({ table }: SelectedSongsProps) {
   }
 
   async function handleDownload() {
-    if (!isSingleSelected) return
+    reset(() => songOptions.saveSongs(songs))
+  }
 
-    reset(() => songOptions.startDownload(firstSong.id))
+  function handleKeepCached() {
+    reset(() => {
+      if (allKept) for (const song of songs) release('song', song.id)
+      else keepSongs(songs)
+    })
   }
 
   async function handleAddToPlaylist(id: string) {
@@ -117,17 +128,27 @@ export function SelectedSongsMenuOptions({ table }: SelectedSongsProps) {
           }}
         />
       )}
+      <DownloadOptionHandler context={true}>
+        <OptionsButtons.Download
+          variant="context"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleDownload()
+          }}
+        />
+      </DownloadOptionHandler>
+      {getSongCacheBackend() && (
+        <OptionsButtons.KeepCached
+          variant="context"
+          kept={allKept}
+          onClick={(e) => {
+            e.stopPropagation()
+            handleKeepCached()
+          }}
+        />
+      )}
       {isSingleSelected && (
         <>
-          <DownloadOptionHandler context={true}>
-            <OptionsButtons.Download
-              variant="context"
-              onClick={(e) => {
-                e.stopPropagation()
-                handleDownload()
-              }}
-            />
-          </DownloadOptionHandler>
           <ContextMenuSeparator />
           <OptionsButtons.Share
             variant="context"
