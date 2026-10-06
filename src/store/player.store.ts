@@ -1441,16 +1441,25 @@ usePlayerStore.subscribe(
 // 2. Throttled emit on progress/queue changes (at most once per second).
 //    Also guarded against syncing state to prevent loops.
 let lastProgressEmit = 0
+// What the last change looked like, to tell playback moving on from a seek.
+let lastSeen = { progress: 0, at: 0, list: null as unknown }
 usePlayerStore.subscribe(
   (state) => ({
     progress: state.playerProgress.progress,
     currentList: state.songlist.currentList,
   }),
-  () => {
+  ({ progress, currentList }) => {
     const now = Date.now()
+    // Just playing on (not a seek or a new queue): a Jam guest with control
+    // doesn't send this, only the host does. Otherwise a guest that lags
+    // (loading, reconnecting) pulls the host back to where it is.
+    const expected = lastSeen.progress + (now - lastSeen.at) / 1000
+    const progressOnly =
+      currentList === lastSeen.list && Math.abs(progress - expected) < 2.5
+    lastSeen = { progress, at: now, list: currentList }
     if (now - lastProgressEmit > 1000) {
       if (!jamService.isSyncing) {
-        jamService.emitPlaybackState()
+        jamService.emitPlaybackState({ progressOnly })
       }
       if (!connectService.isSyncing) {
         connectService.emitPlaybackState()

@@ -570,11 +570,13 @@ io.on('connection', (socket) => {
     io.to(sessionId).emit('participants_update', jamSessions[sessionId].participants);
     emitJamStatusForUsers(jamSessions[sessionId].participants.map(p => p.name));
 
-    // If there's an existing playback state, catch the new user up
-    if (jamSessions[sessionId].lastState) {
+    // Catch a joining guest up with where the Jam is. Not the host coming
+    // back: that state is the host's own, from before it dropped off, and
+    // applying it (with guest control on) would put it back in time.
+    if (jamSessions[sessionId].lastState && !isLead) {
       socket.emit('sync_playback', jamSessions[sessionId].lastState);
-      socket.emit('guest_control_update', { canGuestsControl: jamSessions[sessionId].canGuestsControl || false });
     }
+    socket.emit('guest_control_update', { canGuestsControl: jamSessions[sessionId].canGuestsControl || false });
 
     console.log(`[Jam] ${username} joined session ${sessionId} (Lead: ${isLead})`);
 

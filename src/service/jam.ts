@@ -20,6 +20,10 @@ import { getSyncServerUrl } from '@/utils/syncServerUrl'
 
 // After a sync seek, how long before another one: a seek has to load.
 const SYNC_SEEK_SETTLE_MS = 3000
+// Joining a Jam the server doesn't have: tries again this often, this many
+// times (see jam_error).
+const JOIN_RETRY_MS = 3000
+const JOIN_RETRIES = 2
 
 class JamService {
   private socket: Socket | null = null
@@ -28,6 +32,9 @@ class JamService {
   // while we are applying a remote sync, preventing feedback loops
   private _isSyncing = false
   private lastSyncSeek = 0
+  // Tries at joining a Jam the server doesn't know yet (see jam_error).
+  private joinRetries = 0
+  private joinRetryTimer: ReturnType<typeof setTimeout> | undefined
   // The queue last sent to the server. Updates only carry the queue when it
   // changes; reset on every connect so a fresh server session gets it once.
   private lastSentQueue: ISong[] | null = null
@@ -146,6 +153,8 @@ class JamService {
     })
 
     this.socket.on('participants_update', (participants) => {
+      // In: any retries are over.
+      this.joinRetries = 0
       const before = useJamStore.getState().participants.length
       setParticipants(participants)
       // Someone joined: the host sends where it is now (queue included), so
@@ -182,6 +191,24 @@ class JamService {
 
     this.socket.on('jam_error', ({ code }: { code: string }) => {
       if (code !== 'session_not_found' && code !== 'removed') return
+      // The server may have just restarted, with the host about to open
+      // the Jam again: try a couple more times before giving up. (A Jam
+      // that really ended is reported as session_ended instead.)
+      if (code === 'session_not_found' && this.joinRetries < JOIN_RETRIES) {
+        this.joinRetries++
+        this.socket?.removeAllListeners()
+        this.socket?.disconnect()
+        this.socket = null
+        const retrying = useJamStore.getState().id
+        clearTimeout(this.joinRetryTimer)
+        this.joinRetryTimer = setTimeout(() => {
+          if (useJamStore.getState().id === retrying && !this.socket) {
+            this.connect('join')
+          }
+        }, JOIN_RETRY_MS)
+        return
+      }
+      this.joinRetries = 0
       this.socket?.removeAllListeners()
       this.socket?.disconnect()
       this.socket = null
@@ -224,10 +251,15 @@ class JamService {
     })
   }
 
-  emitPlaybackState() {
+  /**
+   * Sends where playback is. `progressOnly` (playing on, nothing chosen) is
+   * only the host's to send: a guest with control sends what they change.
+   */
+  emitPlaybackState({ progressOnly = false }: { progressOnly?: boolean } = {}) {
     const { isLead, canGuestsControl } = useJamStore.getState()
     if (!this.socket?.connected) return
     if (!isLead && !canGuestsControl) return
+    if (!isLead && progressOnly) return
 
     const { songlist, playerState, playerProgress } = usePlayerStore.getState()
     const currentSong = songlist.currentSong
@@ -360,17 +392,23 @@ class JamService {
               state.songlist.currentSong = state.songlist.currentList[newIndex]
             },
           )
-        } else if (data.queue) {
-          // Song not found in current list at all — use the provided queue
-          const queueIndex = data.queue.findIndex(
-            (s: ISong) => s.id === data.songId,
-          )
-          if (queueIndex !== -1) {
+        } else {
+          // Song not found in the current list at all: use the lead's queue.
+          // A guest without control who picked something else gets the one
+          // kept from earlier updates (this one may not carry it); one with
+          // control keeps their own, which the lead takes up.
+          const { canGuestsControl } = useJamStore.getState()
+          const queue = data.queue ?? (canGuestsControl ? undefined : leadQueue)
+          const queueIndex = queue
+            ? queue.findIndex((s: ISong) => s.id === data.songId)
+            : -1
+          if (queue && queueIndex !== -1) {
+            console.log("[Jam] Back to the lead's queue")
             usePlayerStore.setState(
               (state: ReturnType<typeof usePlayerStore.getState>) => {
-                state.songlist.currentList = data.queue!
+                state.songlist.currentList = queue
                 state.songlist.currentSongIndex = queueIndex
-                state.songlist.currentSong = data.queue![queueIndex]
+                state.songlist.currentSong = queue[queueIndex]
               },
             )
           }
@@ -384,7 +422,9 @@ class JamService {
         usePlayerStore.getState().songlist.currentSong?.id !== songBefore
       if (songChanged) {
         actions.setProgress(Math.floor(data.progress))
-        this.lastSyncSeek = Date.now()
+        // The first correction once it can play goes at once (the player
+        // may have started it from 0 while switching).
+        this.lastSyncSeek = 0
       }
 
       // Sync play/pause
@@ -458,6 +498,7 @@ class JamService {
     this.keepSnapshot = wasInJam
     if (!wasInJam) saveJamSnapshot()
     useJamStore.getState().actions.setSession(sessionId, false)
+    this.joinRetries = 0
     this.connect('join')
   }
 
