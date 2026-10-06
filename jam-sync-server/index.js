@@ -239,13 +239,18 @@ function checkHostPresent(sessionId) {
 // How long a Jam waits when its last guest's connection dropped (a phone in
 // the background) before it ends; leaving or being removed ends it at once.
 const GUESTS_GONE_GRACE_MS = Number(process.env.JAM_GRACE_MS) || 60000
+// The same when the guest's app closed the socket itself. Its leave_session
+// may have been dropped: Socket.IO drops an event that arrives in the same
+// read as its socket's disconnect (apps up to 0.18.3 close right after
+// sending it). A short wait still lets an app swap its socket for a new one.
+const GUEST_CLOSED_GRACE_MS = Math.min(5000, GUESTS_GONE_GRACE_MS)
 
 /**
  * A guest left: once nobody but the host is in a Jam that had guests, it
  * ends, and the host's music goes on with its queue. A Jam that never had a
  * guest (the host waiting for people) is left alone.
  */
-function checkGuestsPresent(sessionId, { immediate }) {
+function checkGuestsPresent(sessionId, { immediate, graceMs = GUESTS_GONE_GRACE_MS }) {
   const jam = jamSessions[sessionId]
   if (!jam || !jam.hadGuests) return
   const guestsHere = jam.participants.some(p => userKey(p.name) !== jam.host)
@@ -261,7 +266,7 @@ function checkGuestsPresent(sessionId, { immediate }) {
     jam.aloneTimer = setTimeout(() => {
       jam.aloneTimer = null
       checkGuestsPresent(sessionId, { immediate: true })
-    }, GUESTS_GONE_GRACE_MS)
+    }, graceMs)
   }
 }
 
@@ -662,7 +667,10 @@ io.on('connection', (socket) => {
           // The host's last device dropped: wait a moment for it, then end.
           checkHostPresent(sessionId);
           // Likewise the last guest's.
-          checkGuestsPresent(sessionId, { immediate: false });
+          checkGuestsPresent(sessionId, {
+            immediate: false,
+            graceMs: reason === 'client namespace disconnect' ? GUEST_CLOSED_GRACE_MS : undefined
+          });
         }
         emitJamStatusForUsers(names);
       }

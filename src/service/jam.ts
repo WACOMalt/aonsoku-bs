@@ -24,6 +24,22 @@ const SYNC_SEEK_SETTLE_MS = 3000
 // times (see jam_error).
 const JOIN_RETRY_MS = 3000
 const JOIN_RETRIES = 2
+// How long a leaving socket waits for the server to close it (see sendLast).
+const LAST_MESSAGE_CLOSE_MS = 2000
+
+/**
+ * Sends a socket's last message (leaving, ending), then lets it go. The
+ * server closes the socket once it has handled the message. Closing it here
+ * at once can deliver the close in the same read as the message, and
+ * Socket.IO drops an event that arrives with its socket's disconnect: the
+ * leave would be lost. So this only closes it later, in case the server
+ * doesn't.
+ */
+function sendLast(socket: Socket, event: string) {
+  socket.removeAllListeners()
+  socket.emit(event)
+  setTimeout(() => socket.disconnect(), LAST_MESSAGE_CLOSE_MS)
+}
 
 class JamService {
   private socket: Socket | null = null
@@ -285,9 +301,7 @@ class JamService {
   /** Leaves the Jam. `silent` skips the restore prompt when switching Jams. */
   disconnect({ silent = false }: { silent?: boolean } = {}) {
     if (this.socket) {
-      this.socket.emit('leave_session')
-      this.socket.removeAllListeners()
-      this.socket.disconnect()
+      sendLast(this.socket, 'leave_session')
       this.socket = null
     }
     useJamStore.getState().actions.reset()
@@ -302,9 +316,7 @@ class JamService {
     // nobody hosts. The server ignores the second one.
     connectService.sendJamControl('end')
     if (this.socket) {
-      this.socket.emit('end_session')
-      this.socket.removeAllListeners()
-      this.socket.disconnect()
+      sendLast(this.socket, 'end_session')
       this.socket = null
     }
     useJamStore.getState().actions.reset()
@@ -577,9 +589,7 @@ class JamService {
   private leaveQuietly(end: boolean) {
     if (!this.socket) return
     if (end) connectService.sendJamControl('end')
-    this.socket.emit(end ? 'end_session' : 'leave_session')
-    this.socket.removeAllListeners()
-    this.socket.disconnect()
+    sendLast(this.socket, end ? 'end_session' : 'leave_session')
     this.socket = null
     this.lastSentQueue = null
     useJamStore.getState().actions.reset()
