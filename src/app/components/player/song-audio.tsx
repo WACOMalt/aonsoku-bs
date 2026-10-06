@@ -7,12 +7,16 @@ import {
   useRef,
   useState,
 } from 'react'
-import { getSongStreamUrl } from '@/api/httpClient'
 import {
   crossfadeElements,
   cutElementAt,
   resetElementFade,
 } from '@/app/hooks/use-audio-context'
+import {
+  cacheInBackground,
+  playableUrl,
+  setPlaybackLoading,
+} from '@/service/song-cache/backend'
 import {
   isPassiveConnectDevice,
   useCanOutputAudio,
@@ -30,7 +34,6 @@ import {
 import { useSongCache } from '@/store/song-cache.store'
 import { LoopState } from '@/types/playerContext'
 import { ISong } from '@/types/responses/song'
-import { ensureSupportForAlac } from '@/utils/alac'
 import { logger } from '@/utils/logger'
 import {
   calculateReplayGain,
@@ -38,7 +41,7 @@ import {
   replayGainParamsFor,
 } from '@/utils/replayGain'
 import { AudioPlayer } from './audio'
-import { BufferLane } from './buffer-lane'
+import { BufferLane, MAX_BUFFER_SECONDS } from './buffer-lane'
 
 /**
  * How long before a track ends the next one is started, to cover the time
@@ -239,10 +242,8 @@ export function SongAudio({ audioRef }: SongAudioProps) {
   const makeSlot = useCallback(
     (track: ISong): Slot => ({
       song: track,
-      url: getSongStreamUrl(
-        track.id,
-        undefined,
-        ensureSupportForAlac(track.suffix),
+      url: playableUrl(
+        track,
         mediaCacheEnabled ? undefined : Date.now().toString(),
       ),
     }),
@@ -663,6 +664,20 @@ export function SongAudio({ audioRef }: SongAudioProps) {
     )
     return () => clearTimeout(timer)
   }, [songId, isPlaying, laneMayFetch])
+
+  // The song cache: kept songs wait while the playing song loads from the
+  // server. A song the lane won't download (too long, or no lane) is
+  // downloaded for the cache once it plays through.
+  useEffect(() => {
+    setPlaybackLoading(!!songId && isPlaying && laneMayFetch !== songId)
+  }, [songId, isPlaying, laneMayFetch])
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the track
+  useEffect(() => {
+    if (!song || !mediaCacheEnabled || laneMayFetch !== song.id) return
+    const laneFetches =
+      !!getLane() && song.duration > 0 && song.duration <= MAX_BUFFER_SECONDS
+    if (!laneFetches) cacheInBackground(song)
+  }, [song?.id, laneMayFetch, mediaCacheEnabled])
 
   // The next track changed while a join onto it was scheduled.
   useEffect(() => {

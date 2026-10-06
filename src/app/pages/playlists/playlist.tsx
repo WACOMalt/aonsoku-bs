@@ -9,6 +9,7 @@ import { PlaylistButtons } from '@/app/components/playlist/buttons'
 import { RemoveSongFromPlaylistDialog } from '@/app/components/playlist/remove-song-dialog'
 import { PlaylistStickyHeader } from '@/app/components/playlist/sticky-header'
 import { DataTable } from '@/app/components/ui/data-table'
+import { useKeptRefresh } from '@/app/hooks/use-kept-refresh'
 import ErrorPage from '@/app/pages/error-page'
 import { songsColumns } from '@/app/tables/songs-columns'
 import { subsonic } from '@/service/subsonic'
@@ -19,6 +20,7 @@ import { queryKeys } from '@/utils/queryKeys'
 
 export default function Playlist() {
   const { playlistId } = useParams() as { playlistId: string }
+  useKeptRefresh('playlist', playlistId)
   const { t } = useTranslation()
   const columns = songsColumns()
   const { setSongList } = usePlayerActions()

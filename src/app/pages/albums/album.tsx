@@ -16,6 +16,7 @@ import {
   useGetArtistAlbums,
   useGetGenreAlbums,
 } from '@/app/hooks/use-album'
+import { useKeptRefresh } from '@/app/hooks/use-kept-refresh'
 import ErrorPage from '@/app/pages/error-page'
 import { songsColumns } from '@/app/tables/songs-columns'
 import { ROUTES } from '@/routes/routesList'
@@ -27,6 +28,7 @@ import { convertSecondsToHumanRead } from '@/utils/convertSecondsToTime'
 
 export default function Album() {
   const { albumId } = useParams() as { albumId: string }
+  useKeptRefresh('album', albumId)
   const [searchParams] = useSearchParams()
   const sharedSongId = searchParams.get(ROUTES.ALBUM.SONG_PARAM)
   const { setSongList } = usePlayerActions()

@@ -83,6 +83,10 @@ export interface IAonsokuAPI {
   setDiscordRpcActivity: (payload: RpcPayload) => void
   clearDiscordRpcActivity: () => void
   saveAppSettings: (payload: ISettingPayload) => void
+  /** The song cache (main/core/songCache.ts). */
+  songCache: (method: string, args?: unknown) => Promise<unknown>
+  /** Called when kept songs change; returns a function that stops it. */
+  onSongCacheChange: (func: () => void) => () => void
   checkForUpdates: () => Promise<UpdateCheckResult | null>
   downloadUpdate: () => void
   quitAndInstall: () => void

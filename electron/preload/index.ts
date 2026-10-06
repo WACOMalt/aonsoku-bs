@@ -32,6 +32,13 @@ const api: IAonsokuAPI = {
     ipcRenderer.send(IpcChannels.ThemeChanged, color),
   setNativeTheme: (isDark) =>
     ipcRenderer.send(IpcChannels.UpdateNativeTheme, isDark),
+  songCache: (method, args) =>
+    ipcRenderer.invoke('song-cache', { method, args }),
+  onSongCacheChange: (func) => {
+    const listener = () => func()
+    ipcRenderer.on('song-cache-changed', listener)
+    return () => ipcRenderer.removeListener('song-cache-changed', listener)
+  },
   downloadFile: (payload) =>
     ipcRenderer.send(IpcChannels.HandleDownloads, payload),
   downloadCompletedListener: (func) => {

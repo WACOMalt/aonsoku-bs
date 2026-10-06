@@ -16,6 +16,7 @@ import {
   useGetArtistInfo,
   useGetTopSongs,
 } from '@/app/hooks/use-artist'
+import { useKeptRefresh } from '@/app/hooks/use-kept-refresh'
 import ErrorPage from '@/app/pages/error-page'
 import { ROUTES } from '@/routes/routesList'
 import { sortRecentAlbums } from '@/utils/album'
@@ -23,6 +24,7 @@ import { sortRecentAlbums } from '@/utils/album'
 export default function Artist() {
   const { t } = useTranslation()
   const { artistId } = useParams() as { artistId: string }
+  useKeptRefresh('artist', artistId)
 
   const {
     data: artist,

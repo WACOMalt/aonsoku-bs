@@ -1,3 +1,4 @@
+import { getSongStreamUrl } from '@/api/httpClient'
 import { ISong } from '@/types/responses/song'
 import { ensureSupportForAlac } from '@/utils/alac'
 
@@ -9,4 +10,14 @@ import { ensureSupportForAlac } from '@/utils/alac'
  */
 export function songCacheKey(song: Pick<ISong, 'id' | 'size' | 'suffix'>) {
   return `${song.id}.${song.size ?? 0}.${ensureSupportForAlac(song.suffix) ?? ''}`
+}
+
+/** The address a song streams from, the same the player uses. */
+export function streamUrlFor(song: ISong, cacheBust?: string) {
+  return getSongStreamUrl(
+    song.id,
+    undefined,
+    ensureSupportForAlac(song.suffix),
+    cacheBust,
+  )
 }

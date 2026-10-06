@@ -18,6 +18,8 @@ export default defineConfig({
       manifest: false, // Use the existing site.webmanifest
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+        // The song cache (public/song-cache-sw.js).
+        importScripts: ['song-cache-sw.js'],
         runtimeCaching: [
           {
             // Cover art ids embed a hash of the artwork, so a given URL always
@@ -37,7 +39,9 @@ export default defineConfig({
             },
           },
           {
-            urlPattern: /\/rest\//,
+            // Not songs (stream, download): they're whole files, kept by
+            // the song cache instead.
+            urlPattern: /\/rest\/(?!stream|download)/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',

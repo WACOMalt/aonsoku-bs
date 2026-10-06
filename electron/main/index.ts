@@ -6,6 +6,7 @@ import {
   registerDeepLinkProtocol,
 } from './core/deepLinks'
 import { createAppMenu } from './core/menu'
+import { registerSongScheme } from './core/songCache'
 import { initAutoUpdater } from './core/updater'
 import { createWindow, mainWindow } from './window'
 
@@ -23,6 +24,8 @@ if (!instanceLock) {
   app.quit()
 } else {
   createAppMenu()
+  // Songs kept on this computer are served through their own scheme.
+  registerSongScheme()
 
   // macOS delivers links through this event, possibly before 'ready'.
   app.on('open-url', (event, url) => {

@@ -125,12 +125,9 @@ export function SongsCacheContent() {
               </ContentItem>
             )}
             {usage && (
-              <ContentItem>
-                <ContentItemTitle>Space used</ContentItemTitle>
-                <ContentItemForm className="text-sm text-muted-foreground text-right">
-                  <UsageText usage={usage} />
-                </ContentItemForm>
-              </ContentItem>
+              <div className="space-y-0.5 text-sm text-muted-foreground">
+                <UsageText usage={usage} />
+              </div>
             )}
             <ContentItem>
               <ContentItemTitle info="Removes the songs cached as they played. Kept songs stay.">
@@ -232,18 +229,18 @@ function UsageText({ usage }: { usage: SongCacheUsage }) {
   const pending =
     usage.keptPending > 0 ? `, ${usage.keptPending} to download` : ''
   return (
-    <span>
-      Played: {formatBytes(usage.played)}
-      {limit > 0 ? ` of ${formatBytes(limit)}` : ''}
-      <br />
-      Kept: {formatBytes(usage.kept)} ({usage.keptSongs} songs{pending})
+    <>
+      <p>
+        Played songs: {formatBytes(usage.played)}
+        {limit > 0 ? ` of ${formatBytes(limit)}` : ''}
+      </p>
+      <p>
+        Kept songs: {formatBytes(usage.kept)} ({usage.keptSongs} songs{pending})
+      </p>
       {usage.free !== undefined && (
-        <>
-          <br />
-          Free on this device: {formatBytes(usage.free)}
-        </>
+        <p>Free on this device: {formatBytes(usage.free)}</p>
       )}
-    </span>
+    </>
   )
 }
 
