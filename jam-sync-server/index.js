@@ -1,5 +1,10 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const { createFriends } = require('./friends');
+
+// Friends and ended Jams are kept here so they survive restarts.
+const DATA_DIR = process.env.SYNC_DATA_DIR || path.join(__dirname, 'data');
 
 // The Navidrome (Subsonic) server whose accounts may use this sync server.
 // It must come from server configuration: letting the client name the
@@ -181,17 +186,69 @@ const friends = createFriends({
   privateSessions,
   jamStatusFor,
   isRemovedFromJam: (sessionId, key) => !!jamSessions[sessionId]?.removed?.has(key),
-  dataDir: process.env.SYNC_DATA_DIR || require('path').join(__dirname, 'data'),
+  dataDir: DATA_DIR,
 })
 
 // How long a Jam waits for its host to come back (a phone dropping off the
 // network for a moment) before it ends for everyone.
 const HOST_GONE_GRACE_MS = Number(process.env.JAM_GRACE_MS) || 60000
 
-// Jams that ended recently, so a host coming back to one (after a dropped
-// connection) is told, instead of quietly starting it again alone.
-const ENDED_MEMORY_MS = 30 * 60 * 1000
-const endedSessions = new Map() // sessionId -> when it ended
+// Jams that ended, so a host coming back to one (after a dropped connection,
+// or with an app that still remembers it) is told, instead of quietly
+// starting it again alone. Kept on disk, so a restart of this server does
+// not forget them.
+const ENDED_MEMORY_MS = 7 * 24 * 60 * 60 * 1000
+const ENDED_FILE = path.join(DATA_DIR, 'ended-jams.json')
+const endedSessions = loadEndedSessions() // sessionId -> when it ended
+let endedSaveTimer = null
+
+function loadEndedSessions() {
+  const ended = new Map()
+  try {
+    const saved = JSON.parse(fs.readFileSync(ENDED_FILE, 'utf8'))
+    for (const [id, at] of Object.entries(saved)) {
+      if (typeof at === 'number' && Date.now() - at < ENDED_MEMORY_MS) ended.set(id, at)
+    }
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.error('[Jam] Could not read', ENDED_FILE, err.message)
+  }
+  return ended
+}
+
+function saveEndedSessions() {
+  clearTimeout(endedSaveTimer)
+  endedSaveTimer = setTimeout(() => {
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true })
+      const partial = `${ENDED_FILE}.part`
+      fs.writeFileSync(partial, JSON.stringify(Object.fromEntries(endedSessions)))
+      fs.renameSync(partial, ENDED_FILE)
+    } catch (err) {
+      console.error('[Jam] Could not save', ENDED_FILE, err.message)
+    }
+  }, 500)
+}
+
+function rememberEnded(sessionId) {
+  endedSessions.set(sessionId, Date.now())
+  emptiedSessions.delete(sessionId)
+  saveEndedSessions()
+}
+
+// How long a Jam whose host's app dropped out of it, with nobody else in it,
+// can still be rejoined by that host (mode 'rejoin', after the app restarts).
+const REJOIN_GRACE_MS = Number(process.env.JAM_REJOIN_GRACE_MS) || 10 * 60 * 1000
+const emptiedSessions = new Map() // sessionId -> { host, at }
+
+/** The last socket left a Jam: it is gone, but its host may come back. */
+function dropEmptyJam(sessionId, { ended }) {
+  const jam = jamSessions[sessionId]
+  clearTimeout(jam.hostGoneTimer)
+  clearTimeout(jam.aloneTimer)
+  delete jamSessions[sessionId]
+  if (ended) rememberEnded(sessionId)
+  else emptiedSessions.set(sessionId, { host: jam.host, at: Date.now() })
+}
 
 /**
  * Ends a Jam for everyone in it. `reason` 'alone' tells the host the last
@@ -202,7 +259,7 @@ function endJam(sessionId, why, reason) {
   if (!jam) return
   clearTimeout(jam.hostGoneTimer)
   clearTimeout(jam.aloneTimer)
-  endedSessions.set(sessionId, Date.now())
+  rememberEnded(sessionId)
   const names = jam.participants.map(p => p.name)
   io.to(sessionId).emit('session_ended', reason ? { reason } : undefined)
   delete jamSessions[sessionId]
@@ -323,7 +380,8 @@ io.on('connection', (socket) => {
   // Only the handshake-verified username is trusted. Any username or isLead
   // in the query string is ignored.
   const username = socket.data.username;
-  // mode: 'create' starts a session, 'join' only enters an existing one.
+  // mode: 'create' starts a session, 'join' only enters an existing one,
+  // 'rejoin' is a host's app coming back to a Jam it remembers (see below).
   // Clients that predate it send neither and get the old create-or-join.
   const { sessionId, deviceName, sessionType, mode } = socket.handshake.query;
 
@@ -530,6 +588,20 @@ io.on('connection', (socket) => {
       return socket.disconnect(true);
     }
 
+    // An app that restarted remembers the Jam it was in, but that memory
+    // can be stale (the end never reached its storage). It gets the Jam back
+    // only if it is still open, or if its own app was the last one in it a
+    // moment ago; otherwise the Jam has ended.
+    if (!jamSessions[sessionId] && mode === 'rejoin') {
+      const emptied = emptiedSessions.get(sessionId)
+      const resumable = emptied && emptied.host === userKey(username) &&
+        Date.now() - emptied.at < REJOIN_GRACE_MS
+      if (!resumable) {
+        socket.emit('session_ended');
+        return socket.disconnect(true);
+      }
+    }
+
     if (!jamSessions[sessionId] && mode === 'join') {
       // An invite link to a Jam that has ended must not quietly start a new
       // session with the invitee as its host.
@@ -554,6 +626,7 @@ io.on('connection', (socket) => {
         canGuestsControl: false,
         host: userKey(username)
       };
+      emptiedSessions.delete(sessionId);
       console.log(`[Jam] Session created: ${sessionId} by ${username}`);
     }
 
@@ -617,9 +690,9 @@ io.on('connection', (socket) => {
         session.participants = session.participants.filter(p => p.id !== socket.id);
         const names = [username, ...session.participants.map(p => p.name)];
         if (session.participants.length === 0) {
-          clearTimeout(session.hostGoneTimer);
-          clearTimeout(session.aloneTimer);
-          delete jamSessions[sessionId];
+          // The last one in it left on purpose: it is over.
+          dropEmptyJam(sessionId, { ended: true });
+          console.log(`[Jam] Session ended: ${sessionId} (everyone left)`);
         } else {
           io.to(sessionId).emit('participants_update', session.participants);
           checkHostPresent(sessionId);
@@ -659,9 +732,7 @@ io.on('connection', (socket) => {
 
         if (jamSessions[sessionId].participants.length === 0) {
           console.log(`[Jam] Session ended: ${sessionId}`);
-          clearTimeout(jamSessions[sessionId].hostGoneTimer);
-          clearTimeout(jamSessions[sessionId].aloneTimer);
-          delete jamSessions[sessionId];
+          dropEmptyJam(sessionId, { ended: false });
         } else {
           io.to(sessionId).emit('participants_update', jamSessions[sessionId].participants);
           // The host's last device dropped: wait a moment for it, then end.
@@ -711,8 +782,16 @@ function clearControl(username) {
 // event. Sockets that are still connected stay, whatever their heartbeat;
 // Socket.IO's own ping already closes dead ones.
 setInterval(() => {
+  let forgotEnded = false
   for (const [id, at] of endedSessions) {
-    if (Date.now() - at > ENDED_MEMORY_MS) endedSessions.delete(id)
+    if (Date.now() - at > ENDED_MEMORY_MS) {
+      endedSessions.delete(id)
+      forgotEnded = true
+    }
+  }
+  if (forgotEnded) saveEndedSessions()
+  for (const [id, { at }] of emptiedSessions) {
+    if (Date.now() - at > REJOIN_GRACE_MS) emptiedSessions.delete(id)
   }
   for (const [username, session] of Object.entries(privateSessions)) {
     let changed = false

@@ -99,9 +99,11 @@ class JamService {
   /**
    * Opens the socket for the Jam in the store. `create` starts the session
    * if it does not exist; `join` only enters an existing one, so a stale
-   * invite cannot make the invitee host of an empty Jam.
+   * invite cannot make the invitee host of an empty Jam. `rejoin` is a host
+   * coming back to the Jam it remembers: the server only lets it back into
+   * one that is still open, since the remembered id may be stale.
    */
-  connect(mode: 'create' | 'join') {
+  connect(mode: 'create' | 'join' | 'rejoin') {
     this.init()
 
     const { id: sessionId, isLead } = useJamStore.getState()
@@ -163,9 +165,17 @@ class JamService {
       setConnecting(false)
     })
 
+    // Let into the Jam (the server sends this to everyone it admits).
+    let admitted = false
+
     // The server decides who hosts; correct our local idea of it.
     this.socket.on('jam_role', ({ isLead }: { isLead: boolean }) => {
+      admitted = true
       useJamStore.getState().actions.setIsLead(isLead)
+      // Back in: if the connection drops later (or the server restarts),
+      // the host reconnects to open the Jam again, as with a new one.
+      const query = this.socket?.io.opts.query
+      if (isLead && query) query.mode = 'create'
     })
 
     this.socket.on('participants_update', (participants) => {
@@ -258,7 +268,9 @@ class JamService {
         toast.info('Everyone left, so the Jam ended. Your music keeps playing.')
         return
       }
-      this.finishJam(wasLead ? 'ended' : 'host-ended')
+      // Refused at the door: the Jam had already ended.
+      if (!admitted) this.finishJam('expired')
+      else this.finishJam(wasLead ? 'ended' : 'host-ended')
     })
 
     // Left from another of this listener's devices.
@@ -515,8 +527,9 @@ class JamService {
 
   /**
    * After a reload the store still names the Jam the listener was in, but
-   * nothing is connected. Rejoin it: a host recreates it if everyone left,
-   * a guest only rejoins if it still exists.
+   * nothing is connected. Rejoin it if it still exists. The server decides:
+   * the stored id can outlive the Jam (a device that crashed before the end
+   * reached its storage), and must not open it again.
    */
   rejoinPersistedSession() {
     const { id, isConnected, isConnecting } = useJamStore.getState()
@@ -551,12 +564,13 @@ class JamService {
         this.rejoinPending = false
         this.keepSnapshot = true
         jam.actions.setSession(account.id, account.isLead)
-        this.connect(account.isLead ? 'create' : 'join')
+        this.connect(account.isLead ? 'rejoin' : 'join')
       } else if (this.rejoinPending && jam.id) {
-        // The server no longer has it (restarted): a host recreates it.
+        // Not in it as far as the server knows: it has ended, or this app
+        // was the last one in it a moment ago (see the server's 'rejoin').
         this.rejoinPending = false
         this.keepSnapshot = true
-        this.connect(jam.isLead ? 'create' : 'join')
+        this.connect(jam.isLead ? 'rejoin' : 'join')
       }
       return
     }
