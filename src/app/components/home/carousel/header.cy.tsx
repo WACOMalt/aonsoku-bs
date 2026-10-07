@@ -1,9 +1,19 @@
 import { ISong } from '@/types/responses/song'
-import HomeHeader from './header'
+import { HomeHeader } from './header'
 
 describe('HomeHeader Component', () => {
+  // The header reads random songs from the server itself.
+  function mockRandomSongs(songs: ISong[]) {
+    cy.intercept('/rest/getRandomSongs**', {
+      body: {
+        'subsonic-response': { status: 'ok', randomSongs: { song: songs } },
+      },
+    })
+  }
+
   it('should not show component if songs list is empty', () => {
-    cy.mount(<HomeHeader songs={[]} />)
+    mockRandomSongs([])
+    cy.mount(<HomeHeader />)
 
     cy.getByTestId('header-carousel').should('not.exist')
   })
@@ -12,7 +22,8 @@ describe('HomeHeader Component', () => {
     cy.mockCoverArt()
 
     cy.fixture('songs/random').then((songs: ISong[]) => {
-      cy.mount(<HomeHeader songs={songs} />)
+      mockRandomSongs(songs)
+      cy.mount(<HomeHeader />)
 
       songs.forEach((song, index) => {
         cy.getByTestId(`carousel-header-song-${index}`).as('activeCarousel')

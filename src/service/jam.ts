@@ -383,13 +383,11 @@ class JamService {
           (s: ISong) => s.id === data.songId,
         )
         if (newIndex !== -1) {
-          usePlayerStore.setState(
-            (state: ReturnType<typeof usePlayerStore.getState>) => {
-              state.songlist.currentList = data.queue!
-              state.songlist.currentSongIndex = newIndex
-              state.songlist.currentSong = data.queue![newIndex]
-            },
-          )
+          usePlayerStore.setState((state) => {
+            state.songlist.currentList = data.queue!
+            state.songlist.currentSongIndex = newIndex
+            state.songlist.currentSong = data.queue![newIndex]
+          })
         }
       } else if (songlist.currentSong?.id !== data.songId) {
         // Same queue but different song (e.g. host skipped to next/prev track)
@@ -398,12 +396,10 @@ class JamService {
           (s: ISong) => s.id === data.songId,
         )
         if (newIndex !== -1) {
-          usePlayerStore.setState(
-            (state: ReturnType<typeof usePlayerStore.getState>) => {
-              state.songlist.currentSongIndex = newIndex
-              state.songlist.currentSong = state.songlist.currentList[newIndex]
-            },
-          )
+          usePlayerStore.setState((state) => {
+            state.songlist.currentSongIndex = newIndex
+            state.songlist.currentSong = state.songlist.currentList[newIndex]
+          })
         } else {
           // Song not found in the current list at all: use the lead's queue.
           // A guest without control who picked something else gets the one
@@ -416,13 +412,11 @@ class JamService {
             : -1
           if (queue && queueIndex !== -1) {
             console.log("[Jam] Back to the lead's queue")
-            usePlayerStore.setState(
-              (state: ReturnType<typeof usePlayerStore.getState>) => {
-                state.songlist.currentList = queue
-                state.songlist.currentSongIndex = queueIndex
-                state.songlist.currentSong = queue[queueIndex]
-              },
-            )
+            usePlayerStore.setState((state) => {
+              state.songlist.currentList = queue
+              state.songlist.currentSongIndex = queueIndex
+              state.songlist.currentSong = queue[queueIndex]
+            })
           }
         }
       }

@@ -648,13 +648,11 @@ class ConnectService {
           (s: ISong) => s.id === data.songId,
         )
         if (newIndex !== -1) {
-          usePlayerStore.setState(
-            (state: ReturnType<typeof usePlayerStore.getState>) => {
-              state.songlist.currentList = data.queue!
-              state.songlist.currentSongIndex = newIndex
-              state.songlist.currentSong = data.queue![newIndex]
-            },
-          )
+          usePlayerStore.setState((state) => {
+            state.songlist.currentList = data.queue!
+            state.songlist.currentSongIndex = newIndex
+            state.songlist.currentSong = data.queue![newIndex]
+          })
         }
       } else if (songlist.currentSong?.id !== data.songId) {
         // Same queue but different song
@@ -663,25 +661,21 @@ class ConnectService {
           (s: ISong) => s.id === data.songId,
         )
         if (newIndex !== -1) {
-          usePlayerStore.setState(
-            (state: ReturnType<typeof usePlayerStore.getState>) => {
-              state.songlist.currentSongIndex = newIndex
-              state.songlist.currentSong = state.songlist.currentList[newIndex]
-            },
-          )
+          usePlayerStore.setState((state) => {
+            state.songlist.currentSongIndex = newIndex
+            state.songlist.currentSong = state.songlist.currentList[newIndex]
+          })
         } else if (data.queue) {
           // Song not found in current list at all — use the provided queue
           const queueIndex = data.queue.findIndex(
             (s: ISong) => s.id === data.songId,
           )
           if (queueIndex !== -1) {
-            usePlayerStore.setState(
-              (state: ReturnType<typeof usePlayerStore.getState>) => {
-                state.songlist.currentList = data.queue!
-                state.songlist.currentSongIndex = queueIndex
-                state.songlist.currentSong = data.queue![queueIndex]
-              },
-            )
+            usePlayerStore.setState((state) => {
+              state.songlist.currentList = data.queue!
+              state.songlist.currentSongIndex = queueIndex
+              state.songlist.currentSong = data.queue![queueIndex]
+            })
           }
         }
       }
@@ -691,11 +685,9 @@ class ConnectService {
       if (
         usePlayerStore.getState().songlist.currentSong?.id !== previousSongId
       ) {
-        usePlayerStore.setState(
-          (state: ReturnType<typeof usePlayerStore.getState>) => {
-            state.playerProgress.progress = data.progress ?? 0
-          },
-        )
+        usePlayerStore.setState((state) => {
+          state.playerProgress.progress = data.progress ?? 0
+        })
       }
 
       // Sync play/pause
@@ -705,25 +697,23 @@ class ConnectService {
 
       // Repeat and shuffle follow the playing device. The queue above
       // already carries the shuffled order.
-      usePlayerStore.setState(
-        (state: ReturnType<typeof usePlayerStore.getState>) => {
-          if (
-            typeof data.loopState === 'number' &&
-            state.playerState.loopState !== data.loopState
-          ) {
-            state.playerState.loopState = data.loopState
-          }
-          if (
-            typeof data.isShuffleActive === 'boolean' &&
-            state.playerState.isShuffleActive !== data.isShuffleActive
-          ) {
-            state.playerState.isShuffleActive = data.isShuffleActive
-          }
-          if (data.originalQueue) {
-            state.songlist.originalList = data.originalQueue
-          }
-        },
-      )
+      usePlayerStore.setState((state) => {
+        if (
+          typeof data.loopState === 'number' &&
+          state.playerState.loopState !== data.loopState
+        ) {
+          state.playerState.loopState = data.loopState
+        }
+        if (
+          typeof data.isShuffleActive === 'boolean' &&
+          state.playerState.isShuffleActive !== data.isShuffleActive
+        ) {
+          state.playerState.isShuffleActive = data.isShuffleActive
+        }
+        if (data.originalQueue) {
+          state.songlist.originalList = data.originalQueue
+        }
+      })
 
       // Sync progress (drift correction). A passive device's audio is
       // silent, so it can follow exactly and its progress bar stays smooth.
@@ -788,11 +778,9 @@ class ConnectService {
           typeof (args as { loopState: number }).loopState === 'number'
         ) {
           const { loopState } = args as { loopState: LoopState }
-          usePlayerStore.setState(
-            (state: ReturnType<typeof usePlayerStore.getState>) => {
-              state.playerState.loopState = loopState
-            },
-          )
+          usePlayerStore.setState((state) => {
+            state.playerState.loopState = loopState
+          })
         }
         break
       case 'toggle_shuffle':

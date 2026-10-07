@@ -37,3 +37,6 @@ out
 # Sync server data (friends), local and in the container volume
 jam-sync-server/data/
 /data/
+
+# TypeScript incremental state (pnpm typecheck)
+*.tsbuildinfo
