@@ -111,11 +111,16 @@ public class CarBrowseTest {
         for (MediaBrowserCompat.MediaItem item : found.get()) log("found", item);
     }
 
-    /** Picks the second song of an album, as a tap in the car does. */
+    /**
+     * Picks the second song of an album, as a tap in the car does: the
+     * newest album, or the one given as "albumId".
+     */
     @Test
     public void playsAPick() throws Exception {
         List<MediaBrowserCompat.MediaItem> albums = children("albums/newest");
-        List<MediaBrowserCompat.MediaItem> songs = children(albums.get(0).getMediaId());
+        String albumId = InstrumentationRegistry.getArguments().getString("albumId");
+        List<MediaBrowserCompat.MediaItem> songs = children(
+            albumId != null ? "album/" + albumId : albums.get(0).getMediaId());
         MediaBrowserCompat.MediaItem pick = songs.get(Math.min(1, songs.size() - 1));
         log("picking", pick);
 
