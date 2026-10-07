@@ -16,8 +16,11 @@ import { app, BrowserWindow, ipcMain, net, protocol } from 'electron'
  *   two at a time, and removed only when no longer kept.
  *
  * The player reads every song through aonsoku-song://song/<key>?src=<url>.
- * A song on the disk is served from it, with seeking; any other request goes
- * to the server.
+ * A song on the disk is served from it, with seeking. The player is sent to
+ * the server for any other song (a redirect, not passed through here): a
+ * stream the player stops reading, once it has enough, would keep its data
+ * waiting on the server's connection, and with HTTP/2 that holds up every
+ * other request on it, such as the album being opened.
  */
 
 export const SONG_SCHEME = 'aonsoku-song'
@@ -280,11 +283,12 @@ async function handleSong(request: Request) {
     return serveFile(played.file(key), key, range)
   }
   if (!src) return new Response(null, { status: 404 })
-  // A whole download (the gapless player's) is kept on its way through.
+  // A whole download (the gapless player's, read to the end) is kept on
+  // its way through.
   if (!range && settings.cachePlayed && !writing.has(key)) {
     return streamAndKeep(key, src)
   }
-  return net.fetch(src, { headers: range ? { Range: range } : {} })
+  return new Response(null, { status: 307, headers: { Location: src } })
 }
 
 // ── Kept songs ──

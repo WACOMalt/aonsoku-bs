@@ -4,7 +4,10 @@
  *
  * The player reads every song through <app>/__song/<key>?src=<server url>:
  * a song kept or played before is answered from the browser's storage, with
- * seeking; any other request goes to the server. A whole download (the
+ * seeking. For any other song the player is sent to the server (a
+ * redirect, not passed through here): a stream the player stops reading
+ * would keep data waiting on the server's connection and, with HTTP/2,
+ * hold up every other request on it. A whole download (the
  * gapless player's) is kept as a played song on its way through. The songs
  * played longest ago are removed once they pass the size in Settings.
  */
@@ -200,7 +203,7 @@ async function handleSong(request, url) {
   if (!range && cachePlayed && !writingSongs.has(key)) {
     return streamAndKeepSong(key, src)
   }
-  return fetch(src, { mode: 'cors', headers: range ? { Range: range } : {} })
+  return Response.redirect(src, 307)
 }
 
 self.addEventListener('fetch', (event) => {
