@@ -177,7 +177,9 @@ export function SongsCacheContent() {
                     className="flex items-center justify-between gap-2 px-3 py-2"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm">{item.name}</p>
+                      <p className="truncate text-sm" title={item.name}>
+                        {item.name}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {KIND_LABEL[item.kind]} · {progress[id] ?? '…'}
                       </p>

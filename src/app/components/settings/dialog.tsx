@@ -52,7 +52,7 @@ export function SettingsDialog() {
           /* Mobile layout: two-panel navigation. SettingsOptions renders
              SidebarMenuButton, which needs a SidebarProvider; without one it
              throws and the whole app unmounts. */
-          <SidebarProvider className="min-h-0 h-full">
+          <SidebarProvider className="min-h-0 h-full min-w-0">
             <div className="flex flex-col h-full w-full overflow-hidden bg-background-foreground">
               {showCategoryList ? (
                 /* Mobile: Category list view */
@@ -81,7 +81,7 @@ export function SettingsDialog() {
           </SidebarProvider>
         ) : (
           /* Desktop layout: sidebar + content (unchanged) */
-          <SidebarProvider className="min-h-full">
+          <SidebarProvider className="min-h-full min-w-0">
             <Sidebar collapsible="none" className="hidden md:flex">
               <SidebarContent>
                 <SettingsOptions />
