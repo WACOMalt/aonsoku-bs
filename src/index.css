@@ -64,7 +64,8 @@
     ) and (pointer: coarse) {
     :root {
       --player-height: 64px;
-      --bottom-nav-height: 56px;
+      /* Plus what the iOS home indicator covers (zero elsewhere). */
+      --bottom-nav-height: calc(56px + env(safe-area-inset-bottom, 0px));
       --content-height: calc(
         100vh -
         var(--header-height) -
@@ -87,10 +88,11 @@
     }
   }
 
-  /* Sideways there is no room for the tab bar; the header opens the menu. */
+  /* Sideways there is no room for the tab bar; the header opens the menu.
+     The player card still keeps clear of the iOS home indicator. */
   @media (orientation: landscape) and (max-height: 500px) {
     :root {
-      --bottom-nav-height: 0px;
+      --bottom-nav-height: env(safe-area-inset-bottom, 0px);
     }
   }
 }

@@ -32,7 +32,9 @@ export function MobileBottomNav() {
     <>
       {/* Below the floating player card, and above the Library panel (which
         is rendered outside it: its blur would trap fixed children). */}
-      <nav className="hidden tabbar:block fixed left-0 right-0 bottom-0 z-[45] bg-background/95 backdrop-blur-sm h-[--bottom-nav-height]">
+      {/* Its height includes the iOS home indicator, which the items stay
+        above (padding; zero elsewhere). */}
+      <nav className="hidden tabbar:block fixed left-0 right-0 bottom-0 z-[45] bg-background/95 backdrop-blur-sm h-[--bottom-nav-height] pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center justify-around h-full">
           <NavItem
             icon={Home}

@@ -94,7 +94,7 @@ export function MobileFullscreen() {
   })
 
   return (
-    <div className="absolute inset-0 z-10 flex flex-col landscape:flex-row gap-4 landscape:gap-8 px-6 landscape:px-8 pt-3 pb-5 landscape:py-4 overflow-hidden">
+    <div className="absolute inset-0 z-10 flex flex-col landscape:flex-row gap-4 landscape:gap-8 px-6 landscape:px-8 pt-3 pb-[calc(1.25rem+env(safe-area-inset-bottom))] landscape:pt-4 landscape:pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-hidden">
       <div className="landscape:hidden" {...closeSwipe}>
         <Header />
       </div>
