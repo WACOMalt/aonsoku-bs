@@ -1,4 +1,4 @@
-import { CloudOff, Monitor, Smartphone, Volume2 } from 'lucide-react'
+import { CloudOff, Monitor, Smartphone, Tablet, Volume2 } from 'lucide-react'
 import { useState } from 'react'
 import {
   AlertDialog,
@@ -111,9 +111,9 @@ export function DevicePicker() {
                         <div className="flex items-center gap-2 min-w-0">
                           {isActive ? (
                             <Volume2 className="size-4 text-primary shrink-0" />
-                          ) : device.name.includes('Android') ||
-                            device.name.includes('iOS') ||
-                            device.name.includes('Mobile') ? (
+                          ) : device.name.includes('iPad') ? (
+                            <Tablet className="size-4 text-muted-foreground shrink-0" />
+                          ) : /Android|iOS|iPhone|Mobile/.test(device.name) ? (
                             <Smartphone className="size-4 text-muted-foreground shrink-0" />
                           ) : (
                             <Monitor className="size-4 text-muted-foreground shrink-0" />
