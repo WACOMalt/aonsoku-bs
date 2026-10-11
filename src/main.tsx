@@ -18,9 +18,11 @@ import { initCar } from '@/service/car'
 import { initAndroidBackButton } from '@/utils/androidBackButton'
 import { blockFeatures } from '@/utils/browser'
 import { initDeepLinks } from '@/utils/deepLinks'
+import { lockIosZoom } from '@/utils/iosViewport'
 import { setupServiceWorker } from '@/utils/serviceWorker'
 
 blockFeatures()
+lockIosZoom()
 setupServiceWorker()
 initDeepLinks()
 initAndroidBackButton()
