@@ -30,6 +30,10 @@ on:
         description: Build Android APK?
         type: boolean
         default: true
+      run_ios:
+        description: Build iOS IPA?
+        type: boolean
+        default: true
 
 jobs:
   prepare:
@@ -264,9 +268,20 @@ jobs:
           ls -la "$ASSET"
           gh release upload "$TAG" "$ASSET" --repo "$GITHUB_REPOSITORY" --clobber
 
+  ios:
+    name: iOS
+    needs: prepare
+    if: github.event_name == 'push' || inputs.run_ios
+    permissions:
+      contents: write
+    uses: ./.github/workflows/ios.yml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit
+
   publish:
     name: Publish release
-    needs: [prepare, desktop, web, android]
+    needs: [prepare, desktop, web, android, ios]
     if: always() && needs.prepare.result == 'success' && needs.desktop.result == 'success' && needs.web.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -279,5 +294,8 @@ jobs:
         run: |
           if [[ "${{ needs.android.result }}" != "success" ]]; then
             echo "::warning::Android job result: ${{ needs.android.result }} - publishing without a fresh APK."
+          fi
+          if [[ "${{ needs.ios.result }}" != "success" ]]; then
+            echo "::warning::iOS job result: ${{ needs.ios.result }} - publishing without an IPA."
           fi
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

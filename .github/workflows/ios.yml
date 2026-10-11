@@ -1,0 +1,88 @@
+name: iOS
+
+# Builds an unsigned .ipa of the iOS app (Capacitor, ios/). Unsigned so no
+# Apple developer account is needed: it is installed with a sideloading tool
+# (AltStore, SideStore, Sideloadly), which signs it with the listener's own
+# Apple ID.
+#
+# Run by itself (Actions → iOS → Run workflow), the .ipa is a download on the
+# run. Called by the release workflow, it is also attached to the release.
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        description: Release to attach the .ipa to
+        type: string
+        required: false
+
+jobs:
+  ipa:
+    name: iOS IPA
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11.9.0
+
+      - name: Setup Node.js and cache
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build web assets
+        run: pnpm build
+
+      - name: Sync Capacitor iOS project
+        run: npx cap sync ios
+
+      - name: Build the app (unsigned)
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          # The same build number as the Android app's versionCode.
+          BUILD=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' android/app/build.gradle)
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            archive
+
+      - name: Package the .ipa
+        run: |
+          ASSET="Aonsoku-${VERSION}-ios.ipa"
+          mkdir -p "$RUNNER_TEMP/ipa/Payload"
+          cp -R "$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app" "$RUNNER_TEMP/ipa/Payload/"
+          (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/$ASSET" Payload)
+          ls -la "$ASSET"
+          echo "ASSET=$ASSET" >> "$GITHUB_ENV"
+
+      - name: Keep the .ipa on the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ASSET }}
+          path: ${{ env.ASSET }}
+          retention-days: 14
+
+      - name: Attach the .ipa to the release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" "$ASSET" --repo "$GITHUB_REPOSITORY" --clobber

@@ -1,7 +1,7 @@
 import { Theme } from '@/types/themeContext'
 import { isDesktop } from './desktop'
 import { hslToHex, hslToHsla, isDarkColor } from './getAverageColor'
-import { isCapacitor } from './platform'
+import { getNativePlatform, isCapacitor } from './platform'
 
 const DEFAULT_TITLE_BAR_COLOR = '#ff000000'
 const DEFAULT_TITLE_BAR_SYMBOL = '#ffffff'
@@ -133,7 +133,8 @@ interface NavigationBarPlugin {
  * Uses requestAnimationFrame to ensure CSS has been applied before reading computed styles.
  */
 export async function updateCapacitorNavigationBar() {
-  if (!isCapacitor()) return
+  // The navigation bar plugin is the Android app's own.
+  if (getNativePlatform() !== 'android') return
 
   const bg = await getThemeBackgroundColor()
   if (!bg) return

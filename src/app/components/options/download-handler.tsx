@@ -4,6 +4,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuSeparator,
 } from '@/app/components/ui/dropdown-menu'
+import { getNativePlatform } from '@/utils/platform'
 
 interface DownloadHandlerProps {
   children: ReactNode
@@ -18,7 +19,8 @@ export function DownloadOptionHandler({
 }: DownloadHandlerProps) {
   const { DISABLE_DOWNLOADS } = window
 
-  if (DISABLE_DOWNLOADS) {
+  // The iOS app's web view can't save files.
+  if (DISABLE_DOWNLOADS || getNativePlatform() === 'ios') {
     return null
   }
 

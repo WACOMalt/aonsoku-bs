@@ -1,3 +1,4 @@
+import AVFoundation
 import UIKit
 import Capacitor
 
@@ -7,7 +8,9 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // A music player: play with the silent switch on, and on in the
+        // background (with UIBackgroundModes audio in Info.plist).
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
         return true
     }
 

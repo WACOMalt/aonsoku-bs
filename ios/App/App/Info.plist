@@ -43,6 +43,24 @@
       </array>
     </dict>
 	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<!-- Music keeps playing with the screen locked or in another app -->
+		<string>audio</string>
+	</array>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<!-- aonsoku://jam/<id>, aonsoku://album/<id> and so on (the web app's
+		     "Open in the app"), as on Android -->
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>xyz.bsums.aonsoku</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>aonsoku</string>
+			</array>
+		</dict>
+	</array>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
