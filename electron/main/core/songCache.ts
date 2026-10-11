@@ -205,7 +205,11 @@ async function serveFile(file: string, key: string, range: string | null) {
  * the played songs as it passes. Kept only if it arrives complete.
  */
 async function streamAndKeep(key: string, src: string) {
-  const upstream = await net.fetch(src)
+  // Aborted when the player stops: cancelling the body alone leaves the
+  // request open, holding a connection (and, with HTTP/2, the server's
+  // connection window) until the server has sent everything.
+  const abort = new AbortController()
+  const upstream = await net.fetch(src, { signal: abort.signal })
   if (!upstream.ok || !upstream.body) return upstream
   const expected = Number(upstream.headers.get('content-length')) || 0
   const target = played.file(key)
@@ -215,11 +219,18 @@ async function streamAndKeep(key: string, src: string) {
   let written = 0
   let done = false
   writing.add(key)
+  // A write that fails (a full disk) drops the copy; it must not throw in
+  // the main process.
+  out.on('error', (error) => {
+    console.warn('[SongCache] Could not write', key, error)
+    fail()
+  })
 
   const fail = () => {
     if (done) return
     done = true
     writing.delete(key)
+    abort.abort()
     out.destroy()
     fs.rm(partial, { force: true }, () => {})
   }
@@ -247,6 +258,9 @@ async function streamAndKeep(key: string, src: string) {
     async pull(controller) {
       try {
         const { done: end, value } = await reader.read()
+        // Stopped (a skip) while this read was on its way: the file is
+        // closed already, and the player wants no more.
+        if (done) return
         if (end) {
           finish()
           controller.close()
