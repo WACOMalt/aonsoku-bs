@@ -5,8 +5,11 @@ name: iOS
 # (AltStore, SideStore, Sideloadly), which signs it with the listener's own
 # Apple ID.
 #
-# Run by itself (Actions → iOS → Run workflow), the .ipa is a download on the
-# run. Called by the release workflow, it is also attached to the release.
+# Also builds the app for the iOS Simulator (a .zip of the .app), to try it
+# on appetize.io.
+#
+# Run by itself (Actions → iOS → Run workflow), both are downloads on the
+# run. Called by the release workflow, they are also attached to the release.
 
 on:
   workflow_dispatch:
@@ -53,6 +56,7 @@ jobs:
           # The same build number as the Android app's versionCode.
           BUILD=$(sed -n 's/.*versionCode \([0-9]*\).*/\1/p' android/app/build.gradle)
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "BUILD=$BUILD" >> "$GITHUB_ENV"
           xcodebuild -project ios/App/App.xcodeproj -scheme App \
             -configuration Release \
             -destination 'generic/platform=iOS' \
@@ -73,6 +77,30 @@ jobs:
           ls -la "$ASSET"
           echo "ASSET=$ASSET" >> "$GITHUB_ENV"
 
+      # For the iOS Simulator, e.g. on appetize.io (upload the .zip): the
+      # same app built for the Simulator, Intel and Apple silicon.
+      - name: Build the app for the Simulator
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/sim" \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            MARKETING_VERSION="$VERSION" \
+            CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package the Simulator build
+        run: |
+          SIM_ASSET="Aonsoku-${VERSION}-ios-simulator.zip"
+          APP="$RUNNER_TEMP/sim/Build/Products/Release-iphonesimulator/App.app"
+          lipo -info "$APP/App"
+          (cd "$(dirname "$APP")" && zip -qry "$GITHUB_WORKSPACE/$SIM_ASSET" App.app)
+          ls -la "$SIM_ASSET"
+          echo "SIM_ASSET=$SIM_ASSET" >> "$GITHUB_ENV"
+
       - name: Keep the .ipa on the run
         uses: actions/upload-artifact@v4
         with:
@@ -80,9 +108,16 @@ jobs:
           path: ${{ env.ASSET }}
           retention-days: 14
 
-      - name: Attach the .ipa to the release
+      - name: Keep the Simulator build on the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.SIM_ASSET }}
+          path: ${{ env.SIM_ASSET }}
+          retention-days: 14
+
+      - name: Attach both to the release
         if: inputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
-        run: gh release upload "$TAG" "$ASSET" --repo "$GITHUB_REPOSITORY" --clobber
+        run: gh release upload "$TAG" "$ASSET" "$SIM_ASSET" --repo "$GITHUB_REPOSITORY" --clobber
