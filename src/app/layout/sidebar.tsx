@@ -39,6 +39,7 @@ export enum SidebarItems {
   Playlists = 'playlists',
   Podcasts = 'podcasts',
   Radios = 'radios',
+  Activity = 'activity',
   PodcastAll = 'podcast-all',
   PodcastLatest = 'podcast-latest',
 }

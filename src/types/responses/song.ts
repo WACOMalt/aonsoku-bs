@@ -101,6 +101,20 @@ export interface TopSongsResponse
 export interface SongsByGenreResponse
   extends SubsonicResponse<{ songsByGenre: SongList }> {}
 
+export interface ISonicMatch {
+  entry: ISong
+  similarity: number
+}
+
+export interface SonicSimilarTracksResponse
+  extends SubsonicResponse<{ sonicMatch?: ISonicMatch[] }> {}
+
+export interface SimilarSongsResponse
+  extends SubsonicResponse<{
+    similarSongs?: { song?: ISong[] }
+    similarSongs2?: { song?: ISong[] }
+  }> {}
+
 export interface FavoritesResponse
   extends SubsonicResponse<{ starred2: SongList }> {}
 

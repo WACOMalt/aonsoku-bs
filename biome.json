@@ -7,7 +7,14 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!cypress/**/*", "!**/*.cy.{ts,tsx}", "!.claude/**"]
+    "includes": [
+      "**",
+      "!cypress/**/*",
+      "!**/*.cy.{ts,tsx}",
+      "!.claude/**",
+      "!ios/**",
+      "!jam-sync-server/**"
+    ]
   },
   "javascript": {
     "formatter": {
@@ -165,6 +172,16 @@
             "noUnsafeNegation": "off",
             "noVar": "error",
             "useGetterReturn": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["src/index.css"],
+      "linter": {
+        "rules": {
+          "nursery": {
+            "noUnknownAtRule": "off"
           }
         }
       }

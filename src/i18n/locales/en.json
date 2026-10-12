@@ -16,6 +16,7 @@
     "favorites": "Favorites",
     "playlists": "Playlists",
     "radios": "Radios",
+    "activity": "Activity",
     "podcasts": "Podcasts",
     "genres": "Genres",
     "emptyPlaylist": "No playlists created yet"
@@ -149,7 +150,8 @@
       "pause": "Pause {{name}}",
       "shuffle": "Play {{name}} in shuffle mode",
       "like": "Like {{name}}",
-      "dislike": "Remove like from {{name}}"
+      "dislike": "Remove like from {{name}}",
+      "radio": "Start radio based on {{name}}"
     },
     "info": {
       "about": "About {{name}}",
@@ -211,12 +213,52 @@
   "favorites": {
     "noSongList": "You haven't added any songs to favorites yet!"
   },
+  "activity": {
+    "plays": "Plays",
+    "dailyActivity": "Daily activity",
+    "listeningHours": "Listening hours",
+    "peak": "Peak",
+    "history": "Listening history from the last year",
+    "less": "Less",
+    "more": "More",
+    "recentPlays": "Recent plays",
+    "topAlbums": "Top albums",
+    "range": {
+      "7d": "7D",
+      "30d": "30D",
+      "90d": "90D",
+      "all": "All"
+    },
+    "summary": {
+      "totalPlays": "Total plays",
+      "listeningTime": "Listening time",
+      "uniqueArtists": "Unique artists",
+      "streak": "Streak",
+      "streakValue_one": "{{count}} day",
+      "streakValue_other": "{{count}} days",
+      "streakBest_one": "Best {{count}} day",
+      "streakBest_other": "Best {{count}} days"
+    },
+    "genres": {
+      "title": "Genres",
+      "unknown": "Unknown",
+      "others": "Others"
+    },
+    "empty": {
+      "title": "No activity yet",
+      "description": "Play some music and your listening stats will show up here."
+    }
+  },
   "artist": {
     "headline": "Artist",
     "buttons": {
       "play": "Play {{artist}} radio",
       "shuffle": "Play {{artist}} radio in shuffle mode",
+      "radio": "Start radio based on {{artist}}",
       "options": "More options for {{artist}}"
+    },
+    "radio": {
+      "empty": "No similar tracks found to start a radio."
     },
     "info": {
       "albumsCount_one": "{{count}} album",
@@ -469,6 +511,7 @@
     "play": "Play",
     "playNext": "Play next",
     "addLast": "Add last",
+    "startRadio": "Start radio",
     "download": "Save file",
     "playlist": {
       "add": "Add to playlist",
@@ -591,13 +634,20 @@
       "previous": "Skip to previous",
       "next": "Skip to next",
       "raiseVolume": "Raise volume",
-      "lowerVolume": "Lower volume"
+      "lowerVolume": "Lower volume",
+      "toggleFullscreen": "Toggle fullscreen"
     },
     "navigation": {
       "label": "Navigation"
     },
     "sidebar": {
       "toggle": "Toggle sidebar"
+    },
+    "zoom": {
+      "label": "Zoom",
+      "in": "Zoom in",
+      "out": "Zoom out",
+      "reset": "Reset zoom"
     }
   },
   "songInfo": {
@@ -644,7 +694,18 @@
       "content": "Content",
       "accounts": "Accounts",
       "desktop": "Desktop Application",
-      "privacy": "Privacy & Security"
+      "privacy": "Privacy & Security",
+      "accessibility": "Accessibility"
+    },
+    "accessibility": {
+      "visual": {
+        "group": "Visual",
+        "description": "Control how large and spaced out the interface appears.",
+        "zoom": {
+          "label": "Zoom level",
+          "info": "Adjust the size of the interface. You can also change this with {{key}} +/-."
+        }
+      }
     },
     "appearance": {
       "general": {

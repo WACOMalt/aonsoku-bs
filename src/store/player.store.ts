@@ -22,6 +22,7 @@ import { areSongListsEqual } from '@/utils/compareSongLists'
 import { isDesktop } from '@/utils/desktop'
 import { discordRpc } from '@/utils/discordRpc'
 import { addNextSongList, shuffleSongList } from '@/utils/songListFunctions'
+import { recordPlayEvent } from './activity-store'
 import { idbStorage } from './idb'
 
 const miniStores = {
@@ -77,6 +78,11 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
             setIsFullscreen: (value) => {
               set((state) => {
                 state.fullscreen.isFullscreen = value
+              })
+            },
+            toggleFullscreen: () => {
+              set((state) => {
+                state.fullscreen.isFullscreen = !state.fullscreen.isFullscreen
               })
             },
             reset: () => {
@@ -515,11 +521,8 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
               const { isShuffleActive } = get().playerState
               const { currentList, currentSongIndex } = get().songlist
 
-              const listLength = currentList.length
-              const isPlayingOneOrLess = listLength <= 1
-              const isPlayingLastSong = currentSongIndex === listLength - 1
-
-              if (isPlayingOneOrLess || isPlayingLastSong) return
+              // One song or none: nothing to shuffle.
+              if (currentList.length <= 1) return
 
               if (isShuffleActive) {
                 const currentSongId = get().songlist.currentSong.id
@@ -528,16 +531,27 @@ export const usePlayerStore = createWithEqualityFn<IPlayerContext>()(
                 )
 
                 set((state) => {
-                  state.songlist.currentList = state.songlist.originalList
-                  state.songlist.currentSongIndex = index
+                  // The order from before shuffling, unless the queue was
+                  // replaced since (a Jam, Connect): then it stays as it is.
+                  if (index !== -1) {
+                    state.songlist.currentList = state.songlist.originalList
+                    state.songlist.currentSongIndex = index
+                  }
                   state.playerState.isShuffleActive = false
                 })
               } else {
-                const { currentList, currentSongIndex } = get().songlist
-                const songListToShuffle = currentList.slice(currentSongIndex)
-                const shuffledList = shuffleSongList(songListToShuffle, 0)
+                // The whole queue, with the current song first, so the songs
+                // before it stay in it too (repeat all plays everything).
+                // The queue as it is now is kept to unshuffle: originalList
+                // can be stale, as a Jam or playSong replace the queue
+                // without it.
+                const shuffledList = shuffleSongList(
+                  currentList,
+                  currentSongIndex,
+                )
 
                 set((state) => {
+                  state.songlist.originalList = currentList
                   state.songlist.shuffledList = shuffledList
                   state.songlist.currentList = shuffledList
                   state.songlist.currentSongIndex = 0
@@ -1134,6 +1148,19 @@ usePlayerStore.subscribe((state, prevState) => {
     usePlayerStore.getState().actions.setHasScrobbledTheCurrentTrack(true)
 
     scrobble.send(currentSong.id, true)
+
+    // Keep a local record of the play for the activity/stats page.
+    recordPlayEvent({
+      songId: currentSong.id,
+      title: currentSong.title,
+      artist: currentSong.artist,
+      artistId: currentSong.artistId,
+      album: currentSong.album,
+      albumId: currentSong.albumId,
+      genre: currentSong.genre,
+      duration: currentSong.duration,
+      playedAt: Date.now(),
+    })
   }
 })
 

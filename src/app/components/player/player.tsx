@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
 import { getProxyURL } from '@/api/podcastClient'
 import { MiniPlayerButton } from '@/app/components/mini-player/button'
 import { RadioInfo } from '@/app/components/player/radio-info'
@@ -19,6 +20,7 @@ import {
   getVolume,
   useGaplessSettings,
   usePlayerActions,
+  usePlayerFullscreen,
   usePlayerIsPlaying,
   usePlayerMediaType,
   usePlayerRef,
@@ -83,6 +85,7 @@ export function Player() {
     usePlayerSonglist()
   const isPlaying = usePlayerIsPlaying()
   const { isSong, isRadio, isPodcast } = usePlayerMediaType()
+  const { toggleFullscreen } = usePlayerFullscreen()
   const audioPlayerRef = usePlayerRef()
   const currentPlaybackRate = usePlayerStore().playerState.currentPlaybackRate
   const canOutputAudio = useCanOutputAudio()
@@ -104,6 +107,17 @@ export function Player() {
 
   const radio = radioList[currentSongIndex]
   const podcast = podcastList[currentSongIndex]
+
+  useHotkeys(
+    'q',
+    () => {
+      if (isSong && song) toggleFullscreen()
+    },
+    {
+      enableOnFormTags: false,
+    },
+    [isSong, song, toggleFullscreen],
+  )
 
   const getAudioRef = useCallback(() => {
     if (isRadio) return radioRef

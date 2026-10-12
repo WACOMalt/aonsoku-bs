@@ -16,6 +16,7 @@
     "favorites": "Favoritos",
     "playlists": "Playlists",
     "radios": "Rádios",
+    "activity": "Atividade",
     "podcasts": "Podcasts",
     "emptyPlaylist": "Nenhuma playlist criada ainda",
     "genres": "Gêneros"
@@ -152,7 +153,8 @@
       "pause": "Pausar {{name}}",
       "shuffle": "Tocar {{name}} no modo aleatório",
       "like": "Curtir {{name}}",
-      "dislike": "Remover curtida de {{name}}"
+      "dislike": "Remover curtida de {{name}}",
+      "radio": "Iniciar rádio baseada em {{name}}"
     },
     "info": {
       "about": "Sobre {{name}}",
@@ -203,12 +205,52 @@
   "favorites": {
     "noSongList": "Você ainda não adicionou músicas nos favoritos!"
   },
+  "activity": {
+    "plays": "Reproduções",
+    "dailyActivity": "Atividade diária",
+    "listeningHours": "Horas de escuta",
+    "peak": "Pico",
+    "history": "Histórico de escuta do último ano",
+    "less": "Menos",
+    "more": "Mais",
+    "recentPlays": "Reproduções recentes",
+    "topAlbums": "Álbuns principais",
+    "range": {
+      "7d": "7D",
+      "30d": "30D",
+      "90d": "90D",
+      "all": "Tudo"
+    },
+    "summary": {
+      "totalPlays": "Reproduções totais",
+      "listeningTime": "Tempo de escuta",
+      "uniqueArtists": "Artistas únicos",
+      "streak": "Sequência",
+      "streakValue_one": "{{count}} dia",
+      "streakValue_other": "{{count}} dias",
+      "streakBest_one": "Melhor {{count}} dia",
+      "streakBest_other": "Melhor {{count}} dias"
+    },
+    "genres": {
+      "title": "Gêneros",
+      "unknown": "Desconhecido",
+      "others": "Outros"
+    },
+    "empty": {
+      "title": "Ainda não há atividade",
+      "description": "Reproduza música e suas estatísticas de escuta aparecerão aqui."
+    }
+  },
   "artist": {
     "headline": "Artista",
     "buttons": {
       "play": "Tocar a rádio de {{artist}}",
       "shuffle": "Tocar a rádio de {{artist}} no modo aleatório",
+      "radio": "Iniciar rádio baseada em {{artist}}",
       "options": "Mais opções para {{artist}}"
+    },
+    "radio": {
+      "empty": "Nenhuma faixa semelhante encontrada para iniciar uma rádio."
     },
     "info": {
       "albumsCount_one": "{{count}} álbum",
@@ -450,6 +492,7 @@
     "play": "Reproduzir",
     "playNext": "Tocar a seguir",
     "addLast": "Adicionar ao final",
+    "startRadio": "Iniciar rádio",
     "download": "Download",
     "playlist": {
       "add": "Adicionar à playlist",
@@ -574,13 +617,20 @@
       "previous": "Voltar à faixa anterior",
       "next": "Pular para a próxima faixa",
       "raiseVolume": "Aumentar volume",
-      "lowerVolume": "Diminuir volume"
+      "lowerVolume": "Diminuir volume",
+      "toggleFullscreen": "Alternar para tela cheia"
     },
     "navigation": {
       "label": "Navegação"
     },
     "sidebar": {
       "toggle": "Alternar barra lateral"
+    },
+    "zoom": {
+      "label": "Zoom",
+      "in": "Aumentar zoom",
+      "out": "Diminuir zoom",
+      "reset": "Restaurar zoom"
     }
   },
   "songInfo": {
@@ -627,7 +677,18 @@
       "content": "Conteúdo",
       "accounts": "Contas",
       "desktop": "Aplicativo para Computador",
-      "privacy": "Privacidade & Segurança"
+      "privacy": "Privacidade & Segurança",
+      "accessibility": "Acessibilidade"
+    },
+    "accessibility": {
+      "visual": {
+        "group": "Visual",
+        "description": "Controle o tamanho e o espaçamento com que a interface é exibida.",
+        "zoom": {
+          "label": "Nível de zoom",
+          "info": "Ajuste o tamanho da interface. Você também pode alterar isso com {{key}} +/-."
+        }
+      }
     },
     "appearance": {
       "general": {

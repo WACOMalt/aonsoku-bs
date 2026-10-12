@@ -11,6 +11,7 @@ import {
   PlayIcon,
   PlusIcon,
   PodcastIcon,
+  Radio,
   ShareIcon,
   Trash,
 } from 'lucide-react'
@@ -60,6 +61,19 @@ function PlayLast({ variant = 'dropdown', ...props }: DropdownMenuItemProps) {
       variant={variant}
       icon={<ListEnd className="mr-2 h-4 w-4" />}
       label={t('options.addLast')}
+      {...props}
+    />
+  )
+}
+
+function StartRadio({ variant = 'dropdown', ...props }: DropdownMenuItemProps) {
+  const { t } = useTranslation()
+
+  return (
+    <MenuItemFactory
+      variant={variant}
+      icon={<Radio className="mr-2 h-4 w-4" />}
+      label={t('options.startRadio')}
       {...props}
     />
   )
@@ -237,6 +251,7 @@ export const OptionsButtons = {
   Play,
   PlayNext,
   PlayLast,
+  StartRadio,
   Download,
   KeepCached,
   AddToPlaylistOption,

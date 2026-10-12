@@ -10,6 +10,7 @@ import { appIcon } from './core/icon'
 import { playerState } from './core/playerState'
 import { setupSongCache } from './core/songCache'
 import { titleBarOverlay } from './core/titleBarOverlay'
+import { defaultTrafficLightPosition } from './core/trafficLight'
 import { setUpdaterWindow } from './core/updater'
 import { StatefulBrowserWindow } from './core/windowPosition'
 import { createTray } from './tray'
@@ -35,7 +36,7 @@ export function createWindow(): void {
     roundedCorners: true,
     frame: false,
     ...(platform.isWindows ? { titleBarOverlay } : {}),
-    trafficLightPosition: { x: 15, y: 14 },
+    trafficLightPosition: defaultTrafficLightPosition,
     icon: appIcon(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),

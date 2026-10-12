@@ -45,12 +45,52 @@
   "favorites": {
     "noSongList": "Você ainda não adicionou músicas nos favoritos!"
   },
+  "activity": {
+    "plays": "Reproduções",
+    "dailyActivity": "Atividade diária",
+    "listeningHours": "Horas de escuta",
+    "peak": "Pico",
+    "history": "Histórico de escuta do último ano",
+    "less": "Menos",
+    "more": "Mais",
+    "recentPlays": "Reproduções recentes",
+    "topAlbums": "Álbuns principais",
+    "range": {
+      "7d": "7D",
+      "30d": "30D",
+      "90d": "90D",
+      "all": "Tudo"
+    },
+    "summary": {
+      "totalPlays": "Reproduções totais",
+      "listeningTime": "Tempo de escuta",
+      "uniqueArtists": "Artistas únicos",
+      "streak": "Sequência",
+      "streakValue_one": "{{count}} dia",
+      "streakValue_other": "{{count}} dias",
+      "streakBest_one": "Melhor {{count}} dia",
+      "streakBest_other": "Melhor {{count}} dias"
+    },
+    "genres": {
+      "title": "Géneros",
+      "unknown": "Desconhecido",
+      "others": "Outros"
+    },
+    "empty": {
+      "title": "Ainda não há atividade",
+      "description": "Reproduza música e as suas estatísticas de escuta aparecerão aqui."
+    }
+  },
   "artist": {
     "headline": "Artista",
     "buttons": {
       "shuffle": "Tocar a rádio de {{artist}} no modo aleatório",
       "options": "Mais opções para {{artist}}",
-      "play": "Tocar a rádio de {{artist}}"
+      "play": "Tocar a rádio de {{artist}}",
+      "radio": "Iniciar rádio baseada em {{artist}}"
+    },
+    "radio": {
+      "empty": "Não foram encontradas faixas semelhantes para iniciar uma rádio."
     },
     "info": {
       "albumsCount_one": "{{count}} álbum",
@@ -523,7 +563,8 @@
       "dislike": "Remover curtida de {{name}}",
       "play": "Reproduzir {{name}}",
       "pause": "Pausar {{name}}",
-      "shuffle": "Reproduzir {{name}} em modo aleatório"
+      "shuffle": "Reproduzir {{name}} em modo aleatório",
+      "radio": "Iniciar rádio baseada em {{name}}"
     },
     "info": {
       "about": "Sobre {{name}}",
@@ -588,6 +629,7 @@
     "favorites": "Favoritos",
     "playlists": "Playlists",
     "radios": "Rádios",
+    "activity": "Atividade",
     "podcasts": "Podcasts",
     "emptyPlaylist": "Nenhuma playlist criada ainda",
     "genres": "Géneros"
@@ -655,6 +697,7 @@
     "play": "Reproduzir",
     "playNext": "Tocar a seguir",
     "addLast": "Adicionar ao final",
+    "startRadio": "Iniciar rádio",
     "download": "Descarregar",
     "playlist": {
       "add": "Adicionar à playlist",

@@ -1,5 +1,7 @@
+import { ActivityLink } from '@/app/components/activity/header-link'
 import { NavigationButtons } from '@/app/components/header/navigation-buttons'
 import { UserDropdown } from '@/app/components/header/user-dropdown'
+import { WindowControlsSpacer } from '@/app/components/header/window-controls-spacer'
 import { HeaderSongInfo } from '@/app/components/header-song'
 import { SettingsButton } from '@/app/components/settings/header-button'
 import { MainSidebarTrigger } from '@/app/components/ui/main-sidebar'
@@ -14,16 +16,17 @@ export function Header() {
       {/* Desktop header layout */}
       <div className="hidden md:grid grid-cols-header h-full px-4">
         <div className="flex items-center">
-          {isMacOS && !isFullscreen && <div className="w-[70px]" />}
+          {isMacOS && !isFullscreen && <WindowControlsSpacer width={70} />}
           <NavigationButtons />
           <MainSidebarTrigger className="ml-2" />
         </div>
         <HeaderSongInfo />
         <div className="flex justify-end items-center gap-2">
+          <ActivityLink />
           <SettingsButton />
           <UserDropdown />
-          {isWindows && !isFullscreen && <div className="w-[122px]" />}
-          {isLinux && !isFullscreen && <div className="w-[94px]" />}
+          {isWindows && !isFullscreen && <WindowControlsSpacer width={122} />}
+          {isLinux && !isFullscreen && <div className="w-[94px] shrink-0" />}
         </div>
       </div>
 
@@ -34,6 +37,7 @@ export function Header() {
         <div className="flex-1 min-w-0">
           <HeaderSongInfo />
         </div>
+        <ActivityLink />
         <SettingsButton />
         <UserDropdown />
       </div>

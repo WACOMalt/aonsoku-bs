@@ -13,6 +13,7 @@ const LIBRARY = {
   EPISODES: '/library/episodes',
   RADIOS: '/library/radios',
   GENRES: '/library/genres',
+  ACTIVITY: '/library/activity',
 }
 
 const ARTIST = {

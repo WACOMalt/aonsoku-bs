@@ -5,6 +5,7 @@ import { ContextMenuSeparator } from '@/app/components/ui/context-menu'
 import { songFileName, useOptions } from '@/app/hooks/use-options'
 import { useAppStore } from '@/store/app.store'
 import { ISong } from '@/types/responses/song'
+import { checkServerType } from '@/utils/servers'
 import { shareItem } from '@/utils/shareLinks'
 import { AddToPlaylistSubMenu } from './add-to-playlist'
 
@@ -22,6 +23,7 @@ export function SongMenuOptions({
   const {
     playNext,
     playLast,
+    playRadio,
     createNewPlaylist,
     addToPlaylist,
     removeSongFromPlaylist,
@@ -30,6 +32,7 @@ export function SongMenuOptions({
     isOnPlaylistPage,
   } = useOptions()
   const hidePlaylistsSection = useAppStore().pages.hidePlaylistsSection
+  const { isNavidrome } = checkServerType()
   const songIndexes = [index.toString()]
 
   return (
@@ -48,6 +51,15 @@ export function SongMenuOptions({
           playLast([song])
         }}
       />
+      {isNavidrome && (
+        <OptionsButtons.StartRadio
+          variant={variant}
+          onClick={(e) => {
+            e.stopPropagation()
+            playRadio(song.id, song)
+          }}
+        />
+      )}
       {!hidePlaylistsSection && (
         <>
           <ContextMenuSeparator />

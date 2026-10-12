@@ -12,6 +12,7 @@ import { keepSongs, release } from '@/service/song-cache/kept'
 import { useAppStore } from '@/store/app.store'
 import { keptId, useSongCache } from '@/store/song-cache.store'
 import { ISong } from '@/types/responses/song'
+import { checkServerType } from '@/utils/servers'
 import { shareItem } from '@/utils/shareLinks'
 import { AddToPlaylistSubMenu } from './add-to-playlist'
 
@@ -23,6 +24,7 @@ export function SelectedSongsMenuOptions({ table }: SelectedSongsProps) {
   const { t } = useTranslation()
   const songOptions = useOptions()
   const hidePlaylistsSection = useAppStore().pages.hidePlaylistsSection
+  const { isNavidrome } = checkServerType()
 
   const { rows } = table.getFilteredSelectedRowModel()
   const isSingleSelected = rows.length === 1
@@ -43,6 +45,12 @@ export function SelectedSongsMenuOptions({ table }: SelectedSongsProps) {
 
   async function handlePlayLast() {
     reset(() => songOptions.playLast(songs))
+  }
+
+  async function handleStartRadio() {
+    if (!isSingleSelected) return
+
+    reset(() => songOptions.playRadio(firstSong.id, firstSong))
   }
 
   async function handleDownload() {
@@ -107,6 +115,15 @@ export function SelectedSongsMenuOptions({ table }: SelectedSongsProps) {
           handlePlayLast()
         }}
       />
+      {isNavidrome && isSingleSelected && (
+        <OptionsButtons.StartRadio
+          variant="context"
+          onClick={(e) => {
+            e.stopPropagation()
+            handleStartRadio()
+          }}
+        />
+      )}
       {!hidePlaylistsSection && (
         <>
           <ContextMenuSeparator />

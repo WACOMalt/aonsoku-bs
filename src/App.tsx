@@ -7,6 +7,7 @@ import { SongCacheObserver } from '@/app/observers/song-cache-observer'
 import { ThemeObserver } from '@/app/observers/theme-observer'
 import { ToastContainer } from '@/app/observers/toast-container'
 import { UpdateObserver } from '@/app/observers/update-observer'
+import { ZoomObserver } from '@/app/observers/zoom-observer'
 import { router } from '@/routes/router'
 import { getUpdateSource } from '@/utils/appUpdate'
 import { isLinux } from '@/utils/desktop'
@@ -19,6 +20,7 @@ function App() {
       <SongCacheObserver />
       <LangObserver />
       <ThemeObserver />
+      <ZoomObserver />
       <SettingsDialog />
       <RouterProvider router={router} />
       <ToastContainer />

@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useTranslation } from 'react-i18next'
 import { useMatches } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { getDownloadUrl } from '@/api/httpClient'
@@ -18,6 +19,7 @@ import { useDownload } from './use-download'
 type SongIdToAdd = Pick<UpdateParams, 'songIdToAdd'>['songIdToAdd']
 
 export function useOptions() {
+  const { t } = useTranslation()
   const { setNextOnQueue, setLastOnQueue, setSongList } = usePlayerActions()
   const { downloadBrowser, downloadDesktop } = useDownload()
   const { setActionData, setConfirmDialogState } = usePlaylistRemoveSong()
@@ -39,6 +41,19 @@ export function useOptions() {
 
   function playLast(list: ISong[]) {
     setLastOnQueue(list)
+  }
+
+  // The id may be a song's or an album's. A song seed plays first.
+  async function playRadio(id: string, seed?: ISong) {
+    const similarSongs = await subsonic.songs.getSimilarSongs(id)
+    const mix = similarSongs.filter((song) => song.id !== seed?.id)
+
+    if (mix.length === 0) {
+      toast.error(t('artist.radio.empty'))
+      return
+    }
+
+    setSongList(seed ? [seed, ...mix] : mix, 0)
   }
 
   /**
@@ -123,6 +138,7 @@ export function useOptions() {
     play,
     playNext,
     playLast,
+    playRadio,
     startDownload,
     saveSongs,
     addToPlaylist,

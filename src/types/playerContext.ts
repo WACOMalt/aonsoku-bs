@@ -163,6 +163,7 @@ export interface IPlayerSettings {
 export interface IPlayerFullscreen {
   isFullscreen: boolean
   setIsFullscreen: (value: boolean) => void
+  toggleFullscreen: () => void
   reset: () => void
 }
 

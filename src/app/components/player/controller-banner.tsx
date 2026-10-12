@@ -1,7 +1,7 @@
 import { Volume2 } from 'lucide-react'
 import { Button } from '@/app/components/ui/button'
-import { useConnectState } from '@/store/connect.store'
 import { connectService } from '@/service/connect'
+import { useConnectState } from '@/store/connect.store'
 
 export function ControllerBanner() {
   const { isActivePlayer, isConnected, devices, thisDeviceId } =
