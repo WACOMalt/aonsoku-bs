@@ -9,12 +9,20 @@
 //
 // Routes (all under /jam-sync/tagger):
 //   GET  /capabilities  no auth; what the app may show
+//   GET  /musicbrainz/<entity>[/<mbid>]?query…   MusicBrainz, as JSON
+//   GET  /coverart/<release|release-group>/<mbid>?size=250|500|1200
+//                       the front cover, from Cover Art Archive
 //   POST /write         { auth: <Subsonic credentials>, items: [...],
 //                         folderCover?: also replace each folder's cover image }
 //                       item: { songId, tags?: {...}, cover?: { mimeType, dataBase64 } }
+//
+// The lookups (GET) take the credentials as base64 JSON in an X-Tagger-Auth
+// header, so they stay out of URLs and logs. Everything but /capabilities
+// is for Navidrome admins only.
 
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
+const { createLookup } = require('./lookup');
 
 const PLUGIN_PATH = '/jam-sync/tagger/plugin';
 const ROUTE_PREFIX = '/jam-sync/tagger/';
@@ -25,6 +33,9 @@ const MAX_BODY_BYTES = 24 * 1024 * 1024;
 // A batch fails when the plugin stays silent this long (it reports each
 // file as it goes, so a long batch keeps it alive).
 const ITEM_SILENCE_MS = 90 * 1000;
+// A checked admin is trusted this long for lookups (browsing results), so
+// losing the admin flag takes effect within a minute.
+const ADMIN_CACHE_MS = 60 * 1000;
 const TAG_FIELDS = [
   'title',
   'artist',
@@ -36,8 +47,17 @@ const TAG_FIELDS = [
   'genre',
 ];
 
-function createTagger({ httpServer, navidromeUrl, verifyWithNavidrome, secret, log = console }) {
+function createTagger({
+  httpServer,
+  navidromeUrl,
+  verifyWithNavidrome,
+  secret,
+  userAgent = 'Aonsoku-BS-Tagger/1 ( https://github.com/WACOMalt/aonsoku-bs )',
+  lookup = createLookup({ userAgent }),
+  log = console,
+}) {
   let plugin = null; // { socket, version, libraries }
+  const admins = new Map(); // credentials hash -> trusted until
   const jobs = new Map(); // jobId -> { results, resolve, reject, timer }
   // Batches go to the plugin one at a time.
   let queue = Promise.resolve();
@@ -93,7 +113,7 @@ function createTagger({ httpServer, navidromeUrl, verifyWithNavidrome, secret, l
     return {
       enabled: !!plugin,
       pluginVersion: plugin?.version ?? null,
-      features: { write: writable, lookup: false, fingerprint: false },
+      features: { write: writable, lookup: !!secret, fingerprint: false },
       libraries: plugin?.libraries ?? [],
     };
   }
@@ -192,6 +212,44 @@ function createTagger({ httpServer, navidromeUrl, verifyWithNavidrome, secret, l
     else job.resolve({ results: job.results, scanTriggered });
   }
 
+  /** For lookups: null when the header carries an admin, else the refusal. */
+  async function checkHeaderAuth(req) {
+    let auth;
+    try {
+      auth = JSON.parse(Buffer.from(String(req.headers['x-tagger-auth'] || ''), 'base64').toString());
+    } catch {
+      auth = null;
+    }
+    if (!isCredentials(auth)) return [401, { error: 'UNAUTHORIZED' }];
+    const key = crypto.createHash('sha256').update(JSON.stringify(pickCredentials(auth))).digest('hex');
+    if ((admins.get(key) ?? 0) > Date.now()) return null;
+    let ok;
+    try {
+      ok = await verifyWithNavidrome(auth);
+    } catch {
+      return [503, { error: 'NAVIDROME_UNAVAILABLE' }];
+    }
+    if (!ok) return [401, { error: 'UNAUTHORIZED' }];
+    if (!(await isAdmin(auth))) return [403, { error: 'FORBIDDEN' }];
+    admins.set(key, Date.now() + ADMIN_CACHE_MS);
+    for (const [k, until] of admins) if (until <= Date.now()) admins.delete(k);
+    return null;
+  }
+
+  async function handleLookup(req, res, route, params) {
+    const refused = await checkHeaderAuth(req);
+    if (refused) return json(res, ...refused);
+    if (route.startsWith('musicbrainz/')) {
+      const { status, body } = await lookup.musicbrainz(route.slice('musicbrainz/'.length), params);
+      return json(res, status, body);
+    }
+    const [, kind, mbid] = route.split('/');
+    const result = await lookup.coverArt(kind, mbid, params.get('size') || '500');
+    if (!Buffer.isBuffer(result.body)) return json(res, result.status, result.body);
+    res.writeHead(200, { 'Content-Type': result.contentType, 'Cache-Control': 'private, max-age=600' });
+    res.end(result.body);
+  }
+
   async function isAdmin(auth) {
     const params = credentialParams(auth);
     params.set('username', auth.u);
@@ -214,7 +272,7 @@ function createTagger({ httpServer, navidromeUrl, verifyWithNavidrome, secret, l
     if (!path.startsWith(ROUTE_PREFIX) || path === PLUGIN_PATH) return false;
     // The apps call from their own origins (the web app, desktop, Android).
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Tagger-Auth');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     if (req.method === 'OPTIONS') {
       res.writeHead(204).end();
@@ -223,6 +281,12 @@ function createTagger({ httpServer, navidromeUrl, verifyWithNavidrome, secret, l
     const route = path.slice(ROUTE_PREFIX.length);
     if (req.method === 'GET' && route === 'capabilities') {
       json(res, 200, capabilities());
+    } else if (secret && req.method === 'GET' && (route.startsWith('musicbrainz/') || route.startsWith('coverart/'))) {
+      const params = new URL(req.url, 'http://x').searchParams;
+      handleLookup(req, res, route, params).catch((err) => {
+        log.warn('[Tagger] Lookup failed:', err.message);
+        if (!res.headersSent) json(res, 502, { error: 'UPSTREAM_UNAVAILABLE' });
+      });
     } else if (req.method === 'POST' && route === 'write') {
       readJson(req)
         .then((body) => write(body))
