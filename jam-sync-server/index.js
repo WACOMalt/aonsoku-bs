@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { createFriends } = require('./friends');
+const { createTagger } = require('./tagger');
 
 // Friends and ended Jams are kept here so they survive restarts.
 const DATA_DIR = process.env.SYNC_DATA_DIR || path.join(__dirname, 'data');
@@ -20,6 +21,7 @@ const httpServer = require('http').createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/admin/sync-users') {
     return handleUserSync(req, res);
   }
+  if (tagger.handleHttp(req, res)) return;
   res.writeHead(404).end();
 });
 
@@ -106,6 +108,14 @@ setInterval(() => {
   const now = Date.now();
   for (const [key, until] of authCache) if (until <= now) authCache.delete(key);
 }, 60000).unref();
+
+// Tag editor, off unless TAGGER_PLUGIN_SECRET is set (see tagger.js).
+const tagger = createTagger({
+  httpServer,
+  navidromeUrl: NAVIDROME_URL,
+  verifyWithNavidrome,
+  secret: process.env.TAGGER_PLUGIN_SECRET || '',
+});
 
 // Session keys are case-insensitive, matching Navidrome logins.
 const userKey = (name) => name.toLowerCase();

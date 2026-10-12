@@ -4,6 +4,10 @@
   "description": "Sync server for Aonsoku-BS Jam and Connect",
   "main": "index.js",
   "dependencies": {
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "ws": "^8.18.0"
+  },
+  "scripts": {
+    "test": "node --test"
   }
 }
