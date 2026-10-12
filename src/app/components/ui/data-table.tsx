@@ -76,6 +76,8 @@ interface DataTableProps<TData, TValue> {
   variant?: 'classic' | 'modern'
   dataType?: 'song' | 'artist' | 'playlist' | 'radio' | 'genre'
   onRowClick?: (row: Row<TData>) => void
+  /** A tap on a touch screen: replaces playing the row (handlePlaySong). */
+  onRowTap?: (row: Row<TData>) => void
   enableVirtualization?: boolean
   /** Id of a row to select and scroll to once, e.g. a song from a share link. */
   highlightRowId?: string | null
@@ -100,6 +102,7 @@ export function DataTable<TData, TValue>({
   variant = 'classic',
   dataType = 'song',
   onRowClick,
+  onRowTap,
   enableVirtualization = false,
   highlightRowId,
 }: DataTableProps<TData, TValue>) {
@@ -411,12 +414,20 @@ export function DataTable<TData, TValue>({
   const handleRowTap = useCallback(
     (e: TouchEvent<HTMLDivElement>, row: Row<TData>) => {
       clearTimeout(tapTimeout)
-      if (isTap && handlePlaySong) {
+      if (!isTap) return
+      if (onRowTap) {
+        // A link in the row (the name) opens the page itself.
+        if ((e.target as Element).closest('a')) return
+        e.stopPropagation()
+        onRowTap(row)
+        return
+      }
+      if (handlePlaySong) {
         e.stopPropagation()
         handlePlaySong(row)
       }
     },
-    [handlePlaySong],
+    [handlePlaySong, onRowTap],
   )
 
   function handleTouchStart() {

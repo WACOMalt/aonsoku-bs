@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { memo } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { ShadowHeader } from '@/app/components/album/shadow-header'
 import { ArtistGridCard } from '@/app/components/artist/artist-grid-card'
 import { ArtistsFallback } from '@/app/components/fallbacks/artists.tsx'
@@ -11,6 +12,7 @@ import { MainViewTypeSelector } from '@/app/components/main-grid'
 import { DataTable } from '@/app/components/ui/data-table'
 import { useSongList } from '@/app/hooks/use-song-list'
 import { artistsColumns } from '@/app/tables/artists-columns'
+import { ROUTES } from '@/routes/routesList'
 import { subsonic } from '@/service/subsonic'
 import { useAppArtistsViewType } from '@/store/app.store'
 import { usePlayerActions } from '@/store/player.store'
@@ -25,6 +27,7 @@ const MemoListWrapper = memo(ListWrapper)
 
 export default function ArtistsList() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const { getArtistAllSongs } = useSongList()
   const { setSongList } = usePlayerActions()
   const {
@@ -75,6 +78,8 @@ export default function ArtistsList() {
             showSearch={true}
             searchColumn="name"
             handlePlaySong={(row) => handlePlayArtistRadio(row.original)}
+            // A tap opens it, as in the grid; it plays from its page.
+            onRowTap={(row) => navigate(ROUTES.ARTIST.PAGE(row.original.id))}
             allowRowSelection={false}
             dataType="artist"
             enableVirtualization={true}
