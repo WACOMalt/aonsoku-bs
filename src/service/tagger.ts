@@ -51,10 +51,22 @@ export interface WriteResult {
 
 /** Why a write did not happen at all (a code, see the i18n "tagger.errors"). */
 export class TaggerError extends Error {
-  constructor(readonly code: string) {
+  constructor(
+    readonly code: string,
+    /** Values for the message, e.g. a size. */
+    readonly params: Record<string, string | number> = {},
+  ) {
     super(code)
   }
 }
+
+/** The most a save may change and carry; the server refuses more. */
+export const MAX_SONGS = 500
+export const MAX_SAVE_MB = 24
+export const MAX_COVER_MB = 15
+
+/** Bytes as megabytes for a message, e.g. 7.4. */
+const megabytes = (bytes: number) => Math.round((bytes / 1024 / 1024) * 10) / 10
 
 const DISABLED: TaggerCapabilities = {
   enabled: false,
@@ -103,6 +115,9 @@ async function write(
   const url = taggerUrl('write')
   const auth = getSyncAuth()
   if (!url || !auth) throw new TaggerError('TAGGER_UNAVAILABLE')
+  if (items.length > MAX_SONGS) {
+    throw new TaggerError('TOO_MANY_SONGS', { max: MAX_SONGS })
+  }
   // Songs that share a cover (an album's, usually) share one upload.
   const covers: Record<string, CoverUpload> = {}
   const keys = new Map<CoverUpload, string>()
@@ -116,20 +131,27 @@ async function write(
     }
     return { ...item, cover: key }
   })
+  const body = new Blob(
+    [JSON.stringify({ auth, items: sent, covers, folderCover })],
+    { type: 'application/json' },
+  )
+  const size = megabytes(body.size)
+  if (body.size > MAX_SAVE_MB * 1024 * 1024) {
+    throw new TaggerError('TOO_LARGE', { size, max: MAX_SAVE_MB })
+  }
   let res: Response
   try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ auth, items: sent, covers, folderCover }),
-    })
+    res = await fetch(url, { method: 'POST', body })
   } catch {
     throw new TaggerError('TAGGER_UNAVAILABLE')
   }
-  if (res.status === 413) throw new TaggerError('TOO_LARGE')
-  const body = await res.json().catch(() => null)
-  if (!res.ok) throw new TaggerError(body?.error ?? 'TAGGER_UNAVAILABLE')
-  return body
+  // Under our limit, so a web server in front of Aonsoku-BS has a lower one.
+  if (res.status === 413) {
+    throw new TaggerError('SERVER_TOO_LARGE', { size, max: MAX_SAVE_MB })
+  }
+  const reply = await res.json().catch(() => null)
+  if (!res.ok) throw new TaggerError(reply?.error ?? 'TAGGER_UNAVAILABLE')
+  return reply
 }
 
 /** A lookup (MusicBrainz, cover art) through the server, as an admin. */
@@ -178,7 +200,12 @@ async function coverFromFile(file: Blob): Promise<CoverUpload> {
   if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
     throw new TaggerError('COVER_TYPE')
   }
-  if (file.size > 15 * 1024 * 1024) throw new TaggerError('COVER_TOO_LARGE')
+  if (file.size > MAX_COVER_MB * 1024 * 1024) {
+    throw new TaggerError('COVER_TOO_LARGE', {
+      size: megabytes(file.size),
+      max: MAX_COVER_MB,
+    })
+  }
   const bytes = new Uint8Array(await file.arrayBuffer())
   let binary = ''
   for (let i = 0; i < bytes.length; i += 0x8000) {

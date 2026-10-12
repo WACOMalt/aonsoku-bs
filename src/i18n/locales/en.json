@@ -962,8 +962,10 @@
       "VALIDATION_FAILED": "a value was not accepted",
       "WRITE_FAILED": "the file could not be written",
       "COVER_TYPE": "Covers must be JPEG or PNG images.",
-      "COVER_TOO_LARGE": "Covers can be at most 15 MB.",
-      "TOO_LARGE": "That's too much to send at once. Choose a smaller cover, or edit fewer songs at a time.",
+      "COVER_TOO_LARGE": "This cover is {{size}} MB, and covers can be at most {{max}} MB. Choose a smaller image.",
+      "TOO_LARGE": "This save is {{size}} MB, and a save can be at most {{max}} MB. Choose a smaller cover, or edit fewer songs at a time.",
+      "SERVER_TOO_LARGE": "The web server in front of Aonsoku-BS refused this {{size}} MB save as too large. Its upload limit for /jam-sync/ needs to be at least {{max}} MB (client_max_body_size in nginx).",
+      "TOO_MANY_SONGS": "A save can change at most {{max}} songs. Edit fewer at a time.",
       "UPSTREAM_UNAVAILABLE": "The lookup service isn't reachable right now.",
       "MUSICBRAINZ_BUSY": "MusicBrainz is busy right now. Try again in a moment.",
       "FINGERPRINT_FAILED": "The song couldn't be listened to. Try again, or search by name."

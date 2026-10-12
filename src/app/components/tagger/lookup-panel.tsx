@@ -116,6 +116,7 @@ export function LookupPanel({
     const code = e instanceof TaggerError ? e.code : 'UPSTREAM_UNAVAILABLE'
     setError(
       t(`tagger.errors.${code}`, {
+        ...(e instanceof TaggerError ? e.params : {}),
         defaultValue: t('tagger.errors.UPSTREAM_UNAVAILABLE'),
       }),
     )

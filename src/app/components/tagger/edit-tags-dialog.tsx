@@ -188,6 +188,7 @@ function EditTagsForm({
   function errorText(error: unknown) {
     const code = error instanceof TaggerError ? error.code : 'WRITE_FAILED'
     return t(`tagger.errors.${code}`, {
+      ...(error instanceof TaggerError ? error.params : {}),
       defaultValue: t('tagger.errors.WRITE_FAILED'),
     })
   }
