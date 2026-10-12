@@ -18,6 +18,14 @@ services:
       - NAVIDROME_URL=${NAVIDROME_URL:-}
       # Where the sync server keeps friends (see the volume below).
       - SYNC_DATA_DIR=/data
+      # Tag editor (off unless set): the shared secret the Navidrome plugin
+      # aonsoku-bs-tagger connects with, the same value as in its settings.
+      - TAGGER_PLUGIN_SECRET=${TAGGER_PLUGIN_SECRET:-}
+      # Optional: "Identify by sound" (free key from acoustid.org; AcoustID
+      # is for non-commercial use).
+      - ACOUSTID_API_KEY=${ACOUSTID_API_KEY:-}
+      # Optional: how the server introduces itself to MusicBrainz.
+      - TAGGER_USER_AGENT=${TAGGER_USER_AGENT:-}
     volumes:
       # Friends, invites and friend settings, kept across rebuilds.
       - ./data/sync:/data

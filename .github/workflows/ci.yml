@@ -40,3 +40,37 @@ jobs:
 
       - name: Run unit tests
         run: pnpm test:unit
+
+  tagger:
+    name: Tagger plugin and server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Sync server tests
+        working-directory: jam-sync-server
+        run: npm install --no-audit --no-fund && npm test
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tagger-plugin
+
+      - name: Plugin tests
+        working-directory: tagger-plugin
+        run: cargo test
+
+      - name: Plugin builds
+        working-directory: tagger-plugin
+        run: cargo build --release --target wasm32-wasip1

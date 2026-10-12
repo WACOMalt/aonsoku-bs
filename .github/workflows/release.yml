@@ -34,6 +34,10 @@ on:
         description: Build iOS IPA?
         type: boolean
         default: true
+      run_tagger_plugin:
+        description: Build the Navidrome tagger plugin?
+        type: boolean
+        default: true
 
 jobs:
   prepare:
@@ -279,9 +283,50 @@ jobs:
       tag: ${{ needs.prepare.outputs.tag }}
     secrets: inherit
 
+  # The Navidrome plugin that writes tag edits (tagger-plugin/). It may only
+  # connect to the server built into it: the repository variable
+  # TAGGER_SYNC_HOST, else mus.bsums.xyz. Its file name is its id in
+  # Navidrome, so it is always aonsoku-bs-tagger.ndp.
+  tagger_plugin:
+    name: Tagger plugin
+    needs: prepare
+    if: github.event_name == 'push' || inputs.run_tagger_plugin
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: tagger-plugin
+
+      - name: Test
+        working-directory: tagger-plugin
+        run: cargo test
+
+      - name: Build
+        working-directory: tagger-plugin
+        env:
+          TAGGER_SYNC_HOST: ${{ vars.TAGGER_SYNC_HOST || 'mus.bsums.xyz' }}
+        run: ./build.sh
+
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        run: gh release upload "$TAG" tagger-plugin/dist/aonsoku-bs-tagger.ndp --repo "$GITHUB_REPOSITORY" --clobber
+
   publish:
     name: Publish release
-    needs: [prepare, desktop, web, android, ios]
+    needs: [prepare, desktop, web, android, ios, tagger_plugin]
     if: always() && needs.prepare.result == 'success' && needs.desktop.result == 'success' && needs.web.result == 'success'
     runs-on: ubuntu-latest
     permissions:
@@ -297,5 +342,8 @@ jobs:
           fi
           if [[ "${{ needs.ios.result }}" != "success" ]]; then
             echo "::warning::iOS job result: ${{ needs.ios.result }} - publishing without an IPA."
+          fi
+          if [[ "${{ needs.tagger_plugin.result }}" != "success" ]]; then
+            echo "::warning::Tagger plugin job result: ${{ needs.tagger_plugin.result }} - publishing without the plugin."
           fi
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest

@@ -17,7 +17,7 @@ disagree, this plan wins.
 |---|---|---|
 | Go helper in the web container writes the files | A **Navidrome plugin** writes them, on the NAS | The music is on another machine |
 | Spec 2: plugins are read-only and can't help | Plugins can write library files once an admin turns on "Allow write access" (0.61+) | Checked in Navidrome's source |
-| Helper HTTP API under /api/tagger | The **sync server** serves /api/tagger and passes write jobs to the plugin over a WebSocket the plugin opens | Plugins can't receive requests |
+| Helper HTTP API under /api/tagger | The **sync server** serves /jam-sync/tagger (already proxied by nginx) and passes write jobs to the plugin over a WebSocket the plugin opens | Plugins can't receive requests |
 | Browser reads tags with taglib-wasm | Not used | The dialog prefills from Subsonic data, and the plugin does all reading and writing |
 | Song path from getSong | Navidrome's Matcher service (0.63+) gives library id + real relative path | getSong reports a made-up path |
 | startScan from the helper | The plugin asks for a scan of the changed folder (as an admin user), if the file watcher hasn't already picked the change up | |
@@ -27,24 +27,23 @@ disagree, this plan wins.
 1. **Plugin `aonsoku-bs-tagger`** (Rust, Navidrome's `nd-pdk`, wasm32-wasip1, `lofty` ≥ 0.25.4).
    - Permissions: library (filesystem, write access granted by the admin), matcher,
      websocket (requiredHosts: the sync server), subsonicapi + users (admin check,
-     startScan), http (Navidrome's own ping on localhost, to check credentials),
-     scheduler (reconnect), taskqueue (one file at a time), http also for cover downloads.
+     startScan), http (Navidrome's own getUser on 127.0.0.1, to check credentials),
+     scheduler (reconnect), taskqueue (one file at a time), cache (link state, covers).
    - Settings (Navidrome's plugin settings form): sync server URL, shared secret, admin
      user for scans.
-   - Opens `wss://<sync server>/tagger-plugin`, authenticates with the secret, and keeps
-     the connection alive. A scheduler job reconnects it when it drops.
+   - Opens `wss://<sync server>/jam-sync/tagger/plugin`, authenticates with the secret,
+     and keeps the connection alive. A scheduler job reconnects it when it drops.
    - Each write job becomes a task (queue concurrency 1). The task resolves the song
      with Matcher, writes the tags with lofty, and sends the result back.
 2. **Sync server** (jam-sync-server, Node):
-   - `GET /api/tagger/capabilities`: enabled only while a plugin is connected.
-   - `POST /api/tagger/write`: Subsonic credentials checked against Navidrome (ping,
-     then getUser: admin only). Splits the batch into jobs for the plugin, waits for
-     the results, and returns one result per song.
+   - `GET /jam-sync/tagger/capabilities`: enabled only while a plugin is connected.
+   - `POST /jam-sync/tagger/write`: Subsonic credentials checked against Navidrome (ping,
+     then getUser: admin only). Passes the batch to the plugin, waits for the results,
+     and returns one result per song.
    - Lookup proxies with the spec's limits: MusicBrainz (1/s, 10-minute cache), Cover
      Art Archive (sizes 250/500/1200), AcoustID (3/s, key from the environment). Only
      these hosts are allowed.
-   - Cover images to write are held briefly at a one-time URL the plugin downloads
-     (plugin HTTP responses are capped at 10 MB, so covers are capped at 10 MB).
+   - Covers to write (up to 15 MB) go to the plugin in the write message, once per batch.
    - Env: `TAGGER_PLUGIN_SECRET` (the feature is off when unset), `ACOUSTID_API_KEY`,
      `TAGGER_USER_AGENT`.
 3. **App** (shared web UI, so web, desktop, Android and iOS all get it):
@@ -54,7 +53,7 @@ disagree, this plan wins.
      values" for fields that differ, changed fields highlighted with a reset each, and
      only edited fields sent.
    - MusicBrainz lookup with track mapping, a cover picker, and fingerprint Identify
-     (chromaprint WASM in a worker, in the last phase).
+     (Chromaprint WASM in a worker).
    - Caches refresh after a write.
 
 ## Who can edit
@@ -68,8 +67,8 @@ Navidrome admins can edit, and that is checked three times:
 2. The sync server checks each write's credentials against Navidrome (`ping`) and the
    admin role (`getUser`). Not an admin: 403.
 3. The plugin checks again before touching a file: it sends the same credentials to
-   Navidrome's own `ping` over localhost (inside the NAS container) and checks the admin
-   role through its Subsonic API service. So the shared secret only protects the link
+   Navidrome's own `getUser` over 127.0.0.1 (inside the NAS container), which checks the
+   sign-in and the admin role at once. So the shared secret only protects the link
    between the sync server and the plugin; without a real admin's credentials nothing is
    written, even if the secret leaks.
 

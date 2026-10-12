@@ -71,7 +71,11 @@
       "type": "VerticalLayout",
       "elements": [
         { "type": "Control", "scope": "#/properties/syncServerUrl" },
-        { "type": "Control", "scope": "#/properties/secret", "options": { "format": "password" } },
+        {
+          "type": "Control",
+          "scope": "#/properties/secret",
+          "options": { "format": "password" }
+        },
         { "type": "Control", "scope": "#/properties/scanUser" },
         { "type": "Control", "scope": "#/properties/navidromeUrl" }
       ]

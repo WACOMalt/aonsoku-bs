@@ -17,3 +17,7 @@ services:
       # Navidrome server the Jam / Connect sync server verifies logins against.
       # Falls back to SERVER_URL when unset.
       - NAVIDROME_URL=${NAVIDROME_URL:-}
+      # Tag editor: see docker-compose.yml.
+      - TAGGER_PLUGIN_SECRET=${TAGGER_PLUGIN_SECRET:-}
+      - ACOUSTID_API_KEY=${ACOUSTID_API_KEY:-}
+      - TAGGER_USER_AGENT=${TAGGER_USER_AGENT:-}

@@ -17,3 +17,6 @@ media/
 # Sync server data
 jam-sync-server/data/
 /data/
+
+# The Navidrome plugin is built separately (tagger-plugin/build.sh)
+tagger-plugin/
