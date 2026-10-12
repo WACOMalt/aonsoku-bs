@@ -1,0 +1,80 @@
+{
+  "name": "Aonsoku-BS Tagger",
+  "author": "Aonsoku-BS",
+  "version": "@VERSION@",
+  "description": "Lets Navidrome admins edit the tags of their music from Aonsoku-BS. Edits arrive from the Aonsoku-BS server and are written into the files here.",
+  "website": "https://github.com/WACOMalt/aonsoku-bs",
+  "permissions": {
+    "library": {
+      "reason": "To write the edited tags into the music files. Needs \"Allow write access\".",
+      "filesystem": true
+    },
+    "matcher": {
+      "reason": "To find the file of each song being edited"
+    },
+    "websocket": {
+      "reason": "To receive tag edits from the Aonsoku-BS server and send back the results",
+      "requiredHosts": ["@SYNC_HOST@"]
+    },
+    "http": {
+      "reason": "To check, with Navidrome itself, that each edit comes from an admin",
+      "requiredHosts": ["127.0.0.1"]
+    },
+    "subsonicapi": {
+      "reason": "To check that the editing user is an admin, and to rescan edited folders"
+    },
+    "users": {
+      "reason": "To check the editing user, and to rescan as the configured admin"
+    },
+    "scheduler": {
+      "reason": "To keep the connection to the Aonsoku-BS server open"
+    },
+    "taskqueue": {
+      "reason": "To write files one at a time",
+      "maxConcurrency": 1
+    },
+    "cache": {
+      "reason": "To remember the connection between calls"
+    }
+  },
+  "config": {
+    "schema": {
+      "type": "object",
+      "properties": {
+        "syncServerUrl": {
+          "type": "string",
+          "title": "Aonsoku-BS server",
+          "description": "The address of your Aonsoku-BS web app, e.g. https://@SYNC_HOST@",
+          "default": "https://@SYNC_HOST@"
+        },
+        "secret": {
+          "type": "string",
+          "title": "Shared secret",
+          "description": "The same value as TAGGER_PLUGIN_SECRET on the Aonsoku-BS server",
+          "minLength": 16
+        },
+        "scanUser": {
+          "type": "string",
+          "title": "Admin user for rescans",
+          "description": "A Navidrome admin the plugin rescans edited folders as"
+        },
+        "navidromeUrl": {
+          "type": "string",
+          "title": "Navidrome, as seen from inside its container",
+          "description": "Used to check each editor's sign-in. Change it only if Navidrome uses another port or a base URL.",
+          "default": "http://127.0.0.1:4533"
+        }
+      },
+      "required": ["syncServerUrl", "secret", "scanUser"]
+    },
+    "uiSchema": {
+      "type": "VerticalLayout",
+      "elements": [
+        { "type": "Control", "scope": "#/properties/syncServerUrl" },
+        { "type": "Control", "scope": "#/properties/secret", "options": { "format": "password" } },
+        { "type": "Control", "scope": "#/properties/scanUser" },
+        { "type": "Control", "scope": "#/properties/navidromeUrl" }
+      ]
+    }
+  }
+}

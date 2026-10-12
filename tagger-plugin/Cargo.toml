@@ -1,0 +1,20 @@
+[package]
+name = "aonsoku-bs-tagger"
+version = "0.1.0"
+edition = "2021"
+description = "Writes audio tags for Aonsoku-BS's tag editor"
+license = "GPL-3.0"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+nd-pdk = { git = "https://github.com/navidrome/navidrome", tag = "v0.64.2" }
+extism-pdk = "1.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true
