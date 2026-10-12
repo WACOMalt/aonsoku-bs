@@ -77,15 +77,28 @@ Removing a user's admin flag in Navidrome locks them out at the next edit.
 
 ## Writing a file safely in a plugin
 
-- Every plugin call is limited to 30 seconds. A lofty write that fits in the existing tag
-  space (padding) is done in place and is instant.
-- A write that needs a full rewrite (e.g. a bigger cover) goes to a temp file in the same
-  folder, then fsync, then rename over the original. If one call can't finish the copy, it
-  continues across several queued task runs, resumable, and the original stays untouched
-  until the rename.
+- Files are written in place, so they keep their owner, mode and Synology ACLs (a WASI
+  plugin can't set those on a replacement file, so the spec's temp-file-and-rename is not
+  used). A safety copy is made first; if the write or reading it back fails, the copy is
+  put back. A copy left by a crash is put back before the file is touched again.
+- Every plugin call is limited to 30 seconds, so each song is its own queued task. A
+  148 MB FLAC given a 1200 px cover (a full rewrite plus the safety copy) took ~0.5 s on
+  the test machine; time it on the DS420j's HDD in phase 11, and only make big rewrites
+  resumable across task runs if it comes near the limit.
 - Every path is checked against the library mount. Symlinks are refused.
-- Optional backup copy before a write (plugin setting: a folder inside the library).
 - Each write is logged: user, song, fields changed, result.
+
+## Covers
+
+- A cover (JPEG or PNG, up to 15 MB, checked by its first bytes) replaces the songs'
+  embedded front cover (in MP4, all its pictures, which have no type).
+- Per edit, the user chooses whether the folder's cover image is replaced too ("Also
+  replace the folder's cover image", on by default): Navidrome shows a folder image
+  (cover.*, folder.*, front.*) before embedded art. The one Navidrome picks is
+  overwritten in place; a different kind (folder.png for a JPEG) is replaced by the same
+  name with the right extension; with none, cover.jpg is created.
+- Identical covers in a batch go to the plugin once; it keeps them in its cache for the
+  batch's tasks.
 
 ## Testing
 

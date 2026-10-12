@@ -13,9 +13,10 @@ use std::str::FromStr;
 use std::time::Duration;
 
 use lofty::config::WriteOptions;
+use lofty::picture::{MimeType, Picture, PictureType};
 use lofty::prelude::*;
 use lofty::tag::items::Timestamp;
-use lofty::tag::Tag;
+use lofty::tag::{Tag, TagType};
 use serde::Deserialize;
 
 /// The fields an edit may change. A missing field is left as it is; an
@@ -55,6 +56,49 @@ impl Edit {
     }
 }
 
+/// A front cover to write: a JPEG or PNG image.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cover {
+    png: bool,
+    data: Vec<u8>,
+}
+
+impl Cover {
+    /// Checks the image is what it says (by its first bytes, not only its
+    /// type).
+    pub fn new(mime_type: &str, data: Vec<u8>) -> Result<Self, Error> {
+        let png = match mime_type {
+            "image/jpeg" | "image/jpg" => false,
+            "image/png" => true,
+            other => return Err(Error::Invalid(format!("covers must be JPEG or PNG, not {other}"))),
+        };
+        let looks_right = if png {
+            data.starts_with(b"\x89PNG\r\n\x1a\n")
+        } else {
+            data.starts_with(&[0xFF, 0xD8, 0xFF])
+        };
+        if !looks_right {
+            return Err(Error::Invalid(format!("the cover is not a {mime_type} image")));
+        }
+        Ok(Self { png, data })
+    }
+
+    fn mime(&self) -> MimeType {
+        if self.png { MimeType::Png } else { MimeType::Jpeg }
+    }
+
+    fn extension(&self) -> &'static str {
+        if self.png { "png" } else { "jpg" }
+    }
+
+    fn picture(&self) -> Picture {
+        Picture::unchecked(self.data.clone())
+            .pic_type(PictureType::CoverFront)
+            .mime_type(self.mime())
+            .build()
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Error {
     FileNotFound,
@@ -86,8 +130,8 @@ impl std::fmt::Display for Error {
     }
 }
 
-/// Writes `edit` into the file at `path`.
-pub fn write(path: &Path, edit: &Edit) -> Result<(), Error> {
+/// Writes `edit`, and a new front cover if given, into the file at `path`.
+pub fn write(path: &Path, edit: &Edit, cover: Option<&Cover>) -> Result<(), Error> {
     let meta = fs::symlink_metadata(path).map_err(|_| Error::FileNotFound)?;
     // A link could lead out of the library.
     if meta.file_type().is_symlink() {
@@ -120,6 +164,14 @@ pub fn write(path: &Path, edit: &Edit) -> Result<(), Error> {
         (None, None) => Tag::new(tag_type),
     };
     apply(&mut tag, edit)?;
+    if let Some(cover) = cover {
+        tag.remove_picture_type(PictureType::CoverFront);
+        if tag.tag_type() == TagType::Mp4Ilst {
+            // MP4 covers have no picture type (they read as "other").
+            tag.remove_picture_type(PictureType::Other);
+        }
+        tag.push_picture(cover.picture());
+    }
 
     let backup = backup_path(path);
     copy_synced(path, &backup).map_err(|e| {
@@ -130,7 +182,7 @@ pub fn write(path: &Path, edit: &Edit) -> Result<(), Error> {
     let written = tag
         .save_to_path(path, WriteOptions::default())
         .map_err(|e| Error::WriteFailed(e.to_string()))
-        .and_then(|()| check(path, edit, duration));
+        .and_then(|()| check(path, edit, cover, duration));
     match written {
         Ok(()) => {
             let _ = fs::remove_file(&backup);
@@ -253,7 +305,7 @@ fn number_and_total(value: &str, field: &str) -> Result<Option<(u32, Option<u32>
 
 /// Reads the file back: the edit must be there, and the audio unchanged in
 /// length (a damaged file reads differently or not at all).
-fn check(path: &Path, edit: &Edit, duration: Duration) -> Result<(), Error> {
+fn check(path: &Path, edit: &Edit, cover: Option<&Cover>, duration: Duration) -> Result<(), Error> {
     let fail = |why: String| Error::WriteFailed(format!("the file did not read back right: {why}"));
     let file = lofty::read_from_path(path).map_err(|e| fail(e.to_string()))?;
     let diff = file.properties().duration().abs_diff(duration);
@@ -286,6 +338,12 @@ fn check(path: &Path, edit: &Edit, duration: Duration) -> Result<(), Error> {
             return Err(fail(format!("discNumber is {actual:?}")));
         }
     }
+    if let Some(cover) = cover {
+        let fronts: Vec<_> = tag.pictures().iter().filter(|p| is_front_cover(tag, p)).collect();
+        if fronts.len() != 1 || fronts[0].data() != cover.data.as_slice() {
+            return Err(fail(format!("{} front covers, not the new one", fronts.len())));
+        }
+    }
     if let Some(v) = &edit.year {
         let actual = tag.date().map(|d| d.year);
         let wanted = (!v.is_empty()).then(|| Timestamp::from_str(v.trim()).map(|d| d.year).ok()).flatten();
@@ -294,4 +352,103 @@ fn check(path: &Path, edit: &Edit, duration: Duration) -> Result<(), Error> {
         }
     }
     Ok(())
+}
+
+/// The front cover: in MP4 every picture is one (they have no type).
+pub fn is_front_cover(tag: &Tag, picture: &Picture) -> bool {
+    picture.pic_type() == PictureType::CoverFront || tag.tag_type() == TagType::Mp4Ilst
+}
+
+/// Image files Navidrome uses as a folder's cover, in the order it looks for
+/// them (its default CoverArtPriority: cover.*, folder.*, front.*).
+const FOLDER_COVER_NAMES: [&str; 3] = ["cover", "folder", "front"];
+const IMAGE_EXTENSIONS: [&str; 6] = ["jpg", "jpeg", "png", "webp", "gif", "bmp"];
+
+/// Replaces the cover image of the folder `dir`: the one Navidrome shows,
+/// or a new cover.jpg/png when there is none. Returns the file written.
+pub fn write_folder_cover(dir: &Path, cover: &Cover) -> Result<PathBuf, Error> {
+    let existing = find_folder_cover(dir)?;
+    let target = match &existing {
+        // Same kind of image: overwrite it, under its own name.
+        Some(path) if same_kind(path, cover) => path.clone(),
+        // Another kind (a folder.png for a JPEG): same name, right extension.
+        Some(path) => path.with_extension(cover.extension()),
+        None => dir.join(format!("cover.{}", cover.extension())),
+    };
+    if fs::symlink_metadata(&target).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(Error::PathOutsideRoot);
+    }
+
+    if target.exists() {
+        recover(&target)?;
+        let backup = backup_path(&target);
+        copy_synced(&target, &backup).map_err(|e| Error::WriteFailed(format!("could not make the safety copy: {e}")))?;
+        let written = write_synced(&target, &cover.data)
+            .map_err(|e| Error::WriteFailed(e.to_string()))
+            .and_then(|()| check_bytes(&target, &cover.data));
+        match written {
+            Ok(()) => {
+                let _ = fs::remove_file(&backup);
+            }
+            Err(e) => {
+                restore(&target, &backup).map_err(|r| Error::WriteFailed(format!("{e}; restoring also failed: {r}")))?;
+                return Err(e);
+            }
+        }
+    } else {
+        let written = write_synced(&target, &cover.data)
+            .map_err(|e| Error::WriteFailed(e.to_string()))
+            .and_then(|()| check_bytes(&target, &cover.data));
+        if let Err(e) = written {
+            let _ = fs::remove_file(&target);
+            return Err(e);
+        }
+    }
+
+    // The old image of the other kind would otherwise still be shown.
+    if let Some(old) = existing.filter(|old| *old != target) {
+        fs::remove_file(&old).map_err(|e| Error::WriteFailed(format!("could not remove the old cover: {e}")))?;
+    }
+    Ok(target)
+}
+
+fn find_folder_cover(dir: &Path) -> Result<Option<PathBuf>, Error> {
+    let meta = fs::symlink_metadata(dir).map_err(|_| Error::FileNotFound)?;
+    if meta.file_type().is_symlink() {
+        return Err(Error::PathOutsideRoot);
+    }
+    let mut images: Vec<(usize, String, PathBuf)> = Vec::new();
+    for entry in fs::read_dir(dir).map_err(|e| Error::WriteFailed(e.to_string()))? {
+        let Ok(entry) = entry else { continue };
+        let path = entry.path();
+        let (Some(stem), Some(ext)) = (path.file_stem(), path.extension()) else { continue };
+        let (stem, ext) = (stem.to_string_lossy().to_lowercase(), ext.to_string_lossy().to_lowercase());
+        if !IMAGE_EXTENSIONS.contains(&ext.as_str()) || !entry.file_type().is_ok_and(|t| t.is_file()) {
+            continue;
+        }
+        if let Some(rank) = FOLDER_COVER_NAMES.iter().position(|name| *name == stem) {
+            images.push((rank, path.file_name().unwrap().to_string_lossy().into_owned(), path));
+        }
+    }
+    images.sort();
+    Ok(images.into_iter().next().map(|(_, _, path)| path))
+}
+
+fn same_kind(path: &Path, cover: &Cover) -> bool {
+    let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+    if cover.png { ext == "png" } else { ext == "jpg" || ext == "jpeg" }
+}
+
+fn write_synced(path: &Path, data: &[u8]) -> std::io::Result<()> {
+    // Truncated and written in place, so an existing file keeps its owner.
+    let mut file = File::options().write(true).create(true).truncate(true).open(path)?;
+    std::io::Write::write_all(&mut file, data)?;
+    file.sync_all()
+}
+
+fn check_bytes(path: &Path, data: &[u8]) -> Result<(), Error> {
+    match fs::read(path) {
+        Ok(read) if read == data => Ok(()),
+        _ => Err(Error::WriteFailed("the cover did not read back right".into())),
+    }
 }

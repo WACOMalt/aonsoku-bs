@@ -9,7 +9,9 @@
 //
 // Routes (all under /jam-sync/tagger):
 //   GET  /capabilities  no auth; what the app may show
-//   POST /write         { auth: <Subsonic credentials>, items: [...] }
+//   POST /write         { auth: <Subsonic credentials>, items: [...],
+//                         folderCover?: also replace each folder's cover image }
+//                       item: { songId, tags?: {...}, cover?: { mimeType, dataBase64 } }
 
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
@@ -17,7 +19,9 @@ const { WebSocketServer } = require('ws');
 const PLUGIN_PATH = '/jam-sync/tagger/plugin';
 const ROUTE_PREFIX = '/jam-sync/tagger/';
 const MAX_ITEMS = 500;
-const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const MAX_COVER_BYTES = 15 * 1024 * 1024;
+// A few covers, in base64.
+const MAX_BODY_BYTES = 24 * 1024 * 1024;
 // A batch fails when the plugin stays silent this long (it reports each
 // file as it goes, so a long batch keeps it alive).
 const ITEM_SILENCE_MS = 90 * 1000;
@@ -112,7 +116,8 @@ function createTagger({ httpServer, navidromeUrl, verifyWithNavidrome, secret, l
     if (!(await isAdmin(auth))) return [403, { error: 'FORBIDDEN' }];
     if (!plugin) return [503, { error: 'TAGGER_UNAVAILABLE' }];
 
-    const run = queue.then(() => runJob(auth, items));
+    const folderCover = body.folderCover === true;
+    const run = queue.then(() => runJob(auth, items, folderCover));
     queue = run.catch(() => {});
     try {
       return [200, await run];
@@ -121,15 +126,35 @@ function createTagger({ httpServer, navidromeUrl, verifyWithNavidrome, secret, l
     }
   }
 
-  function runJob(auth, items) {
+  function runJob(auth, items, folderCover) {
     if (!plugin) return Promise.reject(new Error('TAGGER_UNAVAILABLE'));
     const jobId = crypto.randomUUID();
-    log.log(`[Tagger] ${auth.u} edits ${items.length} song(s) (job ${jobId})`);
+    // An album's songs usually share one cover: it goes to the plugin once.
+    const covers = {};
+    const plain = items.map(({ songId, tags, cover }) => {
+      if (!cover) return { songId, tags };
+      const coverId = crypto.createHash('sha256').update(cover.dataBase64).digest('hex').slice(0, 16);
+      covers[coverId] = { mimeType: cover.mimeType, data: cover.dataBase64 };
+      return { songId, tags, coverId };
+    });
+    const coverCount = Object.keys(covers).length;
+    log.log(
+      `[Tagger] ${auth.u} edits ${items.length} song(s)` +
+        (coverCount ? ` with ${coverCount} cover(s)${folderCover ? ' and folder images' : ''}` : '') +
+        ` (job ${jobId})`,
+    );
     return new Promise((resolve, reject) => {
       const job = { results: new Map(), resolve, reject, timer: null };
       jobs.set(jobId, job);
       arm(jobId, job);
-      send(plugin.socket, { type: 'write', jobId, auth: pickCredentials(auth), items });
+      send(plugin.socket, {
+        type: 'write',
+        jobId,
+        auth: pickCredentials(auth),
+        items: plain,
+        covers,
+        folderCover,
+      });
     }).then(({ results, scanTriggered }) => ({
       // One result per song, in the order asked, failures included.
       results: items.map(
@@ -260,10 +285,26 @@ function validateItems(items) {
       if (typeof value !== 'string' || value.length > 1000) return `"${field}" must be text`;
       tags[field] = value;
     }
-    if (Object.keys(tags).length === 0) return `nothing to change for song ${item.songId}`;
-    clean.push({ songId: item.songId, tags });
+    const cover = item.cover == null ? null : validateCover(item.cover);
+    if (typeof cover === 'string') return `song ${item.songId}: ${cover}`;
+    if (Object.keys(tags).length === 0 && !cover) return `nothing to change for song ${item.songId}`;
+    clean.push(cover ? { songId: item.songId, tags, cover } : { songId: item.songId, tags });
   }
   return clean;
+}
+
+/** A cover to embed (a JPEG or PNG, by its first bytes), or why not. */
+function validateCover(cover) {
+  if (typeof cover !== 'object' || typeof cover.dataBase64 !== 'string') return 'the cover needs dataBase64';
+  if (cover.mimeType !== 'image/jpeg' && cover.mimeType !== 'image/png') return 'covers must be JPEG or PNG';
+  const data = Buffer.from(cover.dataBase64, 'base64');
+  if (data.length === 0) return 'the cover is empty';
+  if (data.length > MAX_COVER_BYTES) return 'the cover is over 15 MB';
+  const isPng = data.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const isJpeg = data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff;
+  if (cover.mimeType === 'image/png' ? !isPng : !isJpeg) return `the cover is not a ${cover.mimeType} image`;
+  // Re-encoded, so the plugin gets plain base64 whatever was sent.
+  return { mimeType: cover.mimeType, dataBase64: data.toString('base64') };
 }
 
 function readJson(req) {

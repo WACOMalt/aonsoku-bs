@@ -131,6 +131,47 @@ test('a batch goes to the plugin and comes back one result per song', async () =
   plugin.close();
 });
 
+test('a shared cover goes to the plugin once, with the folder choice', async () => {
+  const plugin = await connectPlugin();
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64');
+  let job;
+  plugin.on('message', (data) => {
+    const message = JSON.parse(data);
+    if (message.type !== 'write') return;
+    job = message;
+    for (const item of message.items) {
+      plugin.send(JSON.stringify({ type: 'result', jobId: message.jobId, songId: item.songId, ok: true }));
+    }
+    plugin.send(JSON.stringify({ type: 'done', jobId: message.jobId, scanTriggered: true }));
+  });
+  const cover = { mimeType: 'image/jpeg', dataBase64: jpeg };
+  const res = await write({
+    auth: admin,
+    folderCover: true,
+    items: [
+      { songId: 'a', cover },
+      { songId: 'b', tags: { title: 'B' }, cover },
+    ],
+  });
+  assert.equal(res.status, 200);
+  assert.equal(Object.keys(job.covers).length, 1);
+  const [coverId] = Object.keys(job.covers);
+  assert.deepEqual(job.covers[coverId], { mimeType: 'image/jpeg', data: jpeg });
+  assert.deepEqual(job.items, [
+    { songId: 'a', tags: {}, coverId },
+    { songId: 'b', tags: { title: 'B' }, coverId },
+  ]);
+  assert.equal(job.folderCover, true);
+  plugin.close();
+});
+
+test('covers must be JPEG or PNG images under 15 MB', () => {
+  const item = (cover) => [{ songId: 'a', cover }];
+  assert.match(validateItems(item({ mimeType: 'image/gif', dataBase64: 'R0lGOD' })), /JPEG or PNG/);
+  assert.match(validateItems(item({ mimeType: 'image/png', dataBase64: Buffer.from([0xff, 0xd8, 0xff]).toString('base64') })), /not a image\/png/);
+  assert.match(validateItems(item({ mimeType: 'image/jpeg', dataBase64: Buffer.alloc(16 * 1024 * 1024, 0xff).toString('base64') })), /over 15 MB/);
+});
+
 test('a plugin that goes away fails the batch in progress', async () => {
   const plugin = await connectPlugin();
   plugin.on('message', (data) => {

@@ -5,7 +5,10 @@
 //! Navidrome first: the server already did, but the plugin doesn't take its
 //! word for it.
 
+use std::collections::HashMap;
 use std::path::{Component, Path};
+
+use base64::Engine;
 
 use extism_pdk::{info, warn};
 use nd_pdk::host::{cache, http, library, matcher, subsonicapi, task};
@@ -15,7 +18,7 @@ use serde_json::json;
 
 use crate::link;
 use crate::settings::Settings;
-use crate::tags::{self, Edit};
+use crate::tags::{self, Cover, Edit};
 
 pub const QUEUE: &str = "writes";
 const JOB_SECONDS: i64 = 6 * 3600;
@@ -38,13 +41,30 @@ struct WriteJob {
     job_id: String,
     auth: Credentials,
     items: Vec<Item>,
+    /// Each cover once, by id (items name the one they get).
+    #[serde(default)]
+    covers: HashMap<String, CoverData>,
+    /// Also replace the cover image of each edited folder.
+    #[serde(default)]
+    folder_cover: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CoverData {
+    mime_type: String,
+    /// Base64.
+    data: String,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Item {
     song_id: String,
+    #[serde(default)]
     tags: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cover_id: Option<String>,
 }
 
 /// One song of a batch, as queued.
@@ -54,7 +74,7 @@ struct WriteTask {
     job_id: String,
     user: String,
     item: Item,
-    last: bool,
+    folder_cover: bool,
 }
 
 /// Queue setup, at plugin start.
@@ -89,18 +109,35 @@ pub fn accept(message: &str) {
         send_done(&job.job_id, false);
         return;
     }
+    // The covers wait in the cache for the songs' tasks.
+    for (id, cover) in &job.covers {
+        let stored = base64::engine::general_purpose::STANDARD
+            .decode(&cover.data)
+            .map_err(|e| e.to_string())
+            .and_then(|data| {
+                cache::set_bytes(&cover_key(&job.job_id, id), data, JOB_SECONDS).map_err(|e| e.to_string())?;
+                cache::set_string(&cover_mime_key(&job.job_id, id), &cover.mime_type, JOB_SECONDS)
+                    .map_err(|e| e.to_string())
+            });
+        if let Err(e) = stored {
+            warn!("Could not keep cover {id}: {e}");
+        }
+    }
     let _ = cache::set_string(&folders_key(&job.job_id), "[]", JOB_SECONDS);
-    let count = job.items.len();
-    for (index, item) in job.items.into_iter().enumerate() {
+    let _ = cache::set_int(&remaining_key(&job.job_id), job.items.len() as i64, JOB_SECONDS);
+    for item in job.items {
         let song_id = item.song_id.clone();
-        let task = WriteTask { job_id: job.job_id.clone(), user: job.auth.u.clone(), item, last: index + 1 == count };
+        let task = WriteTask {
+            job_id: job.job_id.clone(),
+            user: job.auth.u.clone(),
+            item,
+            folder_cover: job.folder_cover,
+        };
         let payload = serde_json::to_vec(&task).unwrap_or_default();
         if let Err(e) = task::enqueue(QUEUE, payload) {
             warn!("Could not queue song {song_id}: {e}");
             send_result(&job.job_id, &song_id, Err("WRITE_FAILED"));
-            if task.last {
-                finish(&job.job_id);
-            }
+            song_done(&job.job_id);
         }
     }
 }
@@ -156,15 +193,33 @@ pub fn run(payload: &[u8]) -> Result<String, String> {
         remember_folder(&task.job_id, folder);
     }
     send_result(&task.job_id, &task.item.song_id, result.map(|_| ()));
-    if task.last {
-        finish(&task.job_id);
-    }
+    song_done(&task.job_id);
     Ok(String::new())
+}
+
+/// One song of the batch is done; the last one finishes the batch.
+fn song_done(job_id: &str) {
+    let key = remaining_key(job_id);
+    let left = cache::get_int(&key).ok().flatten().unwrap_or(1) - 1;
+    if left > 0 {
+        let _ = cache::set_int(&key, left, JOB_SECONDS);
+    } else {
+        let _ = cache::remove(&key);
+        finish(job_id);
+    }
+}
+
+fn load_cover(job_id: &str, cover_id: &str) -> Result<Cover, &'static str> {
+    let data = cache::get_bytes(&cover_key(job_id, cover_id)).ok().flatten().ok_or("WRITE_FAILED")?;
+    let mime = cache::get_string(&cover_mime_key(job_id, cover_id)).ok().flatten().ok_or("WRITE_FAILED")?;
+    Cover::new(&mime, data).map_err(|e| e.code())
 }
 
 /// Writes one song; its folder, for the rescan.
 fn write_song(task: &WriteTask) -> Result<(i32, String), &'static str> {
-    let edit: Edit = serde_json::from_value(task.item.tags.clone()).map_err(|_| "VALIDATION_FAILED")?;
+    let tags = if task.item.tags.is_null() { serde_json::json!({}) } else { task.item.tags.clone() };
+    let edit: Edit = serde_json::from_value(tags).map_err(|_| "VALIDATION_FAILED")?;
+    let cover = task.item.cover_id.as_deref().map(|id| load_cover(&task.job_id, id)).transpose()?;
     let found = matcher::match_songs(
         vec![SongRef { id: task.item.song_id.clone(), ..Default::default() }],
         matcher::MatchOptions { username: task.user.clone() },
@@ -184,12 +239,30 @@ fn write_song(task: &WriteTask) -> Result<(i32, String), &'static str> {
         .ok_or("FILE_NOT_FOUND")?;
     let relative = safe_relative(&track.path).ok_or("PATH_OUTSIDE_ROOT")?;
     let path = Path::new(&library.mount_point).join(relative);
-    info!("{} edits {} ({})", task.user, track.path, edit.fields().join(", "));
-    tags::write(&path, &edit).map_err(|e| {
+    let mut changes = edit.fields();
+    if cover.is_some() {
+        changes.push("cover");
+    }
+    info!("{} edits {} ({})", task.user, track.path, changes.join(", "));
+    tags::write(&path, &edit, cover.as_ref()).map_err(|e| {
         warn!("Writing {} failed: {e}", track.path);
         e.code()
     })?;
     let folder = relative.parent().map(|p| p.to_string_lossy().into_owned()).unwrap_or_default();
+
+    // The folder's own cover image, once per folder and batch. A failure
+    // there is logged: the song itself is written.
+    if let (true, Some(cover)) = (task.folder_cover, &cover) {
+        let key = format!("job.{}.cover-folder.{}:{}", task.job_id, track.library_id, folder);
+        if !cache::has(&key).unwrap_or(false) {
+            let dir = path.parent().unwrap_or(Path::new(&library.mount_point));
+            match tags::write_folder_cover(dir, cover) {
+                Ok(written) => info!("{} replaced the cover image {}", task.user, written.display()),
+                Err(e) => warn!("Could not replace the cover image in {folder}: {e}"),
+            }
+            let _ = cache::set_string(&key, "1", JOB_SECONDS);
+        }
+    }
     Ok((track.library_id, folder))
 }
 
@@ -221,6 +294,18 @@ fn rescan(folders: &[(i32, String)]) -> bool {
             false
         }
     }
+}
+
+fn remaining_key(job_id: &str) -> String {
+    format!("job.{job_id}.remaining")
+}
+
+fn cover_key(job_id: &str, cover_id: &str) -> String {
+    format!("job.{job_id}.cover.{cover_id}")
+}
+
+fn cover_mime_key(job_id: &str, cover_id: &str) -> String {
+    format!("job.{job_id}.cover.{cover_id}.mime")
 }
 
 fn folders_key(job_id: &str) -> String {

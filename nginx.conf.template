@@ -34,6 +34,23 @@ server {
     add_header X-XSS-Protection "1; mode=block";
     add_header X-Content-Type-Options "nosniff";
 
+    # Tag editor (jam-sync-server/tagger.js): edits carry cover images, so
+    # its requests may be larger than the default.
+    location /jam-sync/tagger/ {
+        client_max_body_size 24M;
+        proxy_pass http://127.0.0.1:7548;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # A batch of edits waits for the plugin to write every file.
+        proxy_read_timeout 900;
+        proxy_send_timeout 900;
+    }
+
     # Reverse proxy for jam-sync WebSocket server
     location /jam-sync/ {
         proxy_pass http://127.0.0.1:7548;
