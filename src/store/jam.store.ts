@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { devtools, persist } from 'zustand/middleware'
 import { immer } from 'zustand/middleware/immer'
+import { PlaybackSource } from '@/types/playerContext'
 import { ISong } from '@/types/responses/song'
 
 export interface IJamLeadState {
@@ -9,6 +10,8 @@ export interface IJamLeadState {
   progress: number
   timestamp: number
   queue?: ISong[]
+  /** What the queue plays from (an album, a playlist), sent with it. */
+  source?: PlaybackSource | null
 }
 
 /** Why this listener's Jam ended, and whether a pre-Jam queue can be restored. */

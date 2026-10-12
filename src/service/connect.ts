@@ -4,7 +4,7 @@ import { useAppStore } from '@/store/app.store'
 import { useConnectStore } from '@/store/connect.store'
 import { IAccountJam, useJamStore } from '@/store/jam.store'
 import { usePlayerStore } from '@/store/player.store'
-import { LoopState } from '@/types/playerContext'
+import { LoopState, PlaybackSource } from '@/types/playerContext'
 import { ISong } from '@/types/responses/song'
 import { getDeviceId, getDeviceName } from '@/utils/deviceId'
 import { describeSyncError, getSyncAuth } from '@/utils/syncAuth'
@@ -20,6 +20,8 @@ type RemotePlaybackState = {
   loopState?: LoopState
   isShuffleActive?: boolean
   originalQueue?: ISong[]
+  /** What the queue plays from (an album, a playlist), sent with it. */
+  source?: PlaybackSource | null
 }
 
 // How long a take-over (see takeOver) waits for the server.
@@ -350,7 +352,14 @@ class ConnectService {
       progress: playerProgress.progress,
       loopState: playerState.loopState,
       isShuffleActive: playerState.isShuffleActive,
-      ...(queueChanged ? { queue: songlist.currentList } : {}),
+      // With the queue, what it plays from, so other devices show the right
+      // album or playlist as playing.
+      ...(queueChanged
+        ? {
+            queue: songlist.currentList,
+            source: playerState.playbackContext.source ?? null,
+          }
+        : {}),
       // The order to go back to when shuffle is turned off, for a device
       // that takes over while shuffled.
       ...(queueChanged && playerState.isShuffleActive
@@ -678,6 +687,14 @@ class ConnectService {
             })
           }
         }
+      }
+
+      // The other device's queue plays from its album or playlist, not from
+      // what this device played before (which would show as playing).
+      if ('source' in data) {
+        usePlayerStore.setState((state) => {
+          state.playerState.playbackContext.source = data.source ?? null
+        })
       }
 
       // A new track loads from the stored position, so start it where the

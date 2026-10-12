@@ -5,6 +5,7 @@ import { useAppStore } from '@/store/app.store'
 import { useConnectStore } from '@/store/connect.store'
 import { useJamStore } from '@/store/jam.store'
 import { usePlayerStore } from '@/store/player.store'
+import { PlaybackSource } from '@/types/playerContext'
 import { ISong } from '@/types/responses/song'
 import {
   clearJamSnapshot,
@@ -199,6 +200,7 @@ class JamService {
         progress: number
         timestamp: number
         queue?: ISong[]
+        source?: PlaybackSource | null
       }) => {
         const { isLead, canGuestsControl } = useJamStore.getState()
         // Lead only syncs from guests when canGuestsControl is enabled
@@ -303,7 +305,14 @@ class JamService {
       songId: currentSong.id,
       isPlaying: playerState.isPlaying,
       progress: playerProgress.progress,
-      ...(queueChanged ? { queue: songlist.currentList } : {}),
+      // With the queue, what it plays from, so guests show the right album
+      // or playlist as playing.
+      ...(queueChanged
+        ? {
+            queue: songlist.currentList,
+            source: playerState.playbackContext.source ?? null,
+          }
+        : {}),
       timestamp: Date.now(),
     })
 
@@ -361,6 +370,7 @@ class JamService {
     progress: number
     timestamp: number
     queue?: ISong[]
+    source?: PlaybackSource | null
   }) {
     // Set flag so both the drift-correction subscriber AND the emit subscriber
     // ignore changes we make here, preventing feedback loops
@@ -376,12 +386,17 @@ class JamService {
       // picked a song from another list.
       const leadQueue =
         data.queue ?? useJamStore.getState().lastLeadState?.queue
+      const leadSource =
+        'source' in data
+          ? data.source
+          : useJamStore.getState().lastLeadState?.source
       useJamStore.getState().actions.setLastLeadState({
         songId: data.songId,
         isPlaying: data.isPlaying,
         progress: data.progress,
         timestamp: data.timestamp,
         queue: leadQueue,
+        source: leadSource,
       })
 
       // 1. Sync Queue if provided and different
@@ -428,9 +443,18 @@ class JamService {
               state.songlist.currentList = queue
               state.songlist.currentSongIndex = queueIndex
               state.songlist.currentSong = queue[queueIndex]
+              state.playerState.playbackContext.source = leadSource ?? null
             })
           }
         }
+      }
+
+      // The lead's queue plays from its album or playlist, not from what this
+      // listener played before (which would show as playing).
+      if ('source' in data) {
+        usePlayerStore.setState((state) => {
+          state.playerState.playbackContext.source = data.source ?? null
+        })
       }
 
       // Moved to another song (joining, or the host skipped): it starts at
