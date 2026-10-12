@@ -72,6 +72,20 @@ describe('buildItems', () => {
     expect(buildItems([song('1')], {}, cover)).toEqual([{ songId: '1', cover }])
   })
 
+  it('gives each song its own edits, under the shared ones', () => {
+    expect(
+      buildItems(songs, { genre: 'Jazz' }, null, {
+        '1': { title: 'One', genre: 'Rock' },
+      }),
+    ).toEqual([
+      { songId: '1', tags: { title: 'One', genre: 'Jazz' } },
+      { songId: '2', tags: { genre: 'Jazz' } },
+    ])
+    expect(buildItems(songs, {}, null, { '2': { title: 'Two' } })).toEqual([
+      { songId: '2', tags: { title: 'Two' } },
+    ])
+  })
+
   it('sends nothing without changes', () => {
     expect(buildItems(songs, {}, null)).toEqual([])
   })

@@ -56,13 +56,31 @@ test('MusicBrainz gets one request a second, an identifying User-Agent, and a ca
   assert.equal(calls.length, 2, 'the repeat came from the cache');
 });
 
-test('"slow down" answers are not cached', async () => {
+test('"busy" is tried once more, then reported, and not cached', async () => {
   const url = musicbrainzUrl('release', query({ query: 'busy' }));
-  const { impl, calls } = fakeFetch({ [url]: [503, { error: 'rate limited' }] });
-  const lookup = createLookup({ userAgent: 'Test', fetchImpl: impl, intervalMs: 0 });
-  assert.equal((await lookup.musicbrainz('release', query({ query: 'busy' }))).status, 503);
+  const { impl, calls } = fakeFetch({ [url]: [503, { error: 'The MusicBrainz web server is currently busy.' }] });
+  const lookup = createLookup({ userAgent: 'Test', fetchImpl: impl, intervalMs: 0, busyRetryMs: 10 });
+  assert.deepEqual(await lookup.musicbrainz('release', query({ query: 'busy' })), {
+    status: 503,
+    body: { error: 'MUSICBRAINZ_BUSY' },
+  });
+  assert.equal(calls.length, 2, 'retried once');
   await lookup.musicbrainz('release', query({ query: 'busy' }));
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 4, 'not cached');
+});
+
+test('a busy MusicBrainz that recovers answers normally', async () => {
+  const url = musicbrainzUrl('release', query({ query: 'later' }));
+  let n = 0;
+  const impl = async () => {
+    n += 1;
+    return n === 1
+      ? new Response('{}', { status: 503 })
+      : new Response(JSON.stringify({ releases: ['ok'] }), { status: 200 });
+  };
+  const lookup = createLookup({ userAgent: 'Test', fetchImpl: impl, intervalMs: 0, busyRetryMs: 10 });
+  assert.deepEqual((await lookup.musicbrainz('release', query({ query: 'later' }))).body, { releases: ['ok'] });
+  assert.ok(url);
 });
 
 test('covers follow redirects to the Internet Archive only', async () => {

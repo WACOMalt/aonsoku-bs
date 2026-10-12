@@ -963,7 +963,23 @@
       "WRITE_FAILED": "the file could not be written",
       "COVER_TYPE": "Covers must be JPEG or PNG images.",
       "COVER_TOO_LARGE": "Covers can be at most 15 MB.",
-      "UPSTREAM_UNAVAILABLE": "The lookup service isn't reachable right now."
+      "UPSTREAM_UNAVAILABLE": "The lookup service isn't reachable right now.",
+      "MUSICBRAINZ_BUSY": "MusicBrainz is busy right now. Try again in a moment."
+    },
+    "lookup": {
+      "open": "Look up on MusicBrainz",
+      "search": "Search",
+      "nothing": "No releases found. Try other words.",
+      "tracks_one": "{{count}} track",
+      "tracks_other": "{{count}} tracks",
+      "matched": "{{matched}} of {{count}} songs matched. Fix any match below.",
+      "leave": "Leave as is",
+      "useCover": "Use this release's cover",
+      "apply": "Use this release",
+      "otherRelease": "Other releases",
+      "back": "Back to the tags",
+      "perSong": "Per song, from {{release}}:",
+      "noCover": "The release's cover couldn't be downloaded right now, so it was left out. Choose an image, or try again later."
     }
   }
 }

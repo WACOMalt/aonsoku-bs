@@ -66,26 +66,33 @@ export function validate(field: TagField, value: string): string | null {
 }
 
 /**
- * What to send: per song, only the fields the user changed (an emptied
- * field clears it), and the new cover. Songs with nothing to change are
- * left out.
+ * What to send. Each song gets its own edits (from a MusicBrainz release:
+ * its title, track…), then the fields the user changed for all (an
+ * emptied field clears it), and the new cover. Songs with nothing to
+ * change are left out.
  */
 export function buildItems(
   songs: ISong[],
   changed: Partial<Record<TagField, string>>,
   cover: CoverUpload | null,
+  perSong: Record<string, TagEdit> = {},
 ): WriteItem[] {
-  const tags: TagEdit = {}
+  const shared: TagEdit = {}
   for (const field of TAG_FIELDS) {
     const value = changed[field]
     if (value === undefined || !isEditable(field, songs.length)) continue
-    tags[field] = value.trim()
+    shared[field] = value.trim()
   }
-  const hasTags = Object.keys(tags).length > 0
-  if (!hasTags && !cover) return []
-  return songs.map((song) => ({
-    songId: song.id,
-    ...(hasTags ? { tags } : {}),
-    ...(cover ? { cover } : {}),
-  }))
+  return songs.flatMap((song) => {
+    const tags = { ...perSong[song.id], ...shared }
+    const hasTags = Object.keys(tags).length > 0
+    if (!hasTags && !cover) return []
+    return [
+      {
+        songId: song.id,
+        ...(hasTags ? { tags } : {}),
+        ...(cover ? { cover } : {}),
+      },
+    ]
+  })
 }

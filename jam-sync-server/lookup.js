@@ -22,7 +22,13 @@ const MAX_JSON_ENTRIES = 500;
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 const TIMEOUT_MS = 20000;
 
-function createLookup({ userAgent, fetchImpl = fetch, now = Date.now, intervalMs = MB_INTERVAL_MS } = {}) {
+function createLookup({
+  userAgent,
+  fetchImpl = fetch,
+  now = Date.now,
+  intervalMs = MB_INTERVAL_MS,
+  busyRetryMs = 1500,
+} = {}) {
   const json = new Map(); // url -> { until, status, body }
   const images = new Map(); // url -> { until, status, body, contentType }
   let imageBytes = 0;
@@ -39,24 +45,34 @@ function createLookup({ userAgent, fetchImpl = fetch, now = Date.now, intervalMs
     const cached = fresh(json, url);
     if (cached) return cached;
 
-    const run = mbQueue.then(async () => {
-      const wait = lastMb + intervalMs - now();
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      lastMb = now();
-      return fetchImpl(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
-    });
-    mbQueue = run.catch(() => {});
+    const request = () => {
+      const run = mbQueue.then(async () => {
+        const wait = lastMb + intervalMs - now();
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        lastMb = now();
+        return fetchImpl(url, { headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
+      });
+      mbQueue = run.catch(() => {});
+      return run;
+    };
 
     let res;
     try {
-      res = await run;
+      res = await request();
+      // "Busy" is MusicBrainz asking to slow down: one more try, later.
+      if (res.status === 503) {
+        await new Promise((r) => setTimeout(r, busyRetryMs));
+        res = await request();
+      }
     } catch {
       return { status: 502, body: { error: 'UPSTREAM_UNAVAILABLE' } };
     }
+    if (res.status === 503) return { status: 503, body: { error: 'MUSICBRAINZ_BUSY' } };
     const body = await res.json().catch(() => null);
-    if (!body) return { status: 502, body: { error: 'UPSTREAM_UNAVAILABLE' } };
+    if (!body || (!res.ok && res.status !== 404 && res.status !== 400)) {
+      return { status: 502, body: { error: 'UPSTREAM_UNAVAILABLE' } };
+    }
     const result = { status: res.status, body };
-    // Only answers worth keeping: not "slow down" or server errors.
     if (res.ok || res.status === 404) remember(json, url, result, MAX_JSON_ENTRIES);
     return result;
   }
@@ -74,6 +90,11 @@ function createLookup({ userAgent, fetchImpl = fetch, now = Date.now, intervalMs
     let res;
     try {
       res = await fetchFollowing(url);
+      // The Internet Archive has bad moments: one more try.
+      if (res.status >= 500) {
+        await new Promise((r) => setTimeout(r, busyRetryMs));
+        res = await fetchFollowing(url);
+      }
     } catch {
       return { status: 502, body: { error: 'UPSTREAM_UNAVAILABLE' } };
     }
