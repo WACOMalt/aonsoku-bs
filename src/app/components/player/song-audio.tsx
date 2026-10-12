@@ -360,11 +360,13 @@ export function SongAudio({ audioRef }: SongAudioProps) {
       laneTimer.current = null
       lane.setVolume(getVolume() / 100)
       setOnLane(true)
+      // No element loads this track, so nothing else sets its length.
+      setCurrentDuration(Math.floor(lane.current.buffer.duration))
       const { currentList: list, currentSongIndex: at } =
         usePlayerStore.getState().songlist
       if (list[at]?.id === fromTrackId) playNextSong()
     },
-    [playNextSong, setOnLane],
+    [playNextSong, setCurrentDuration, setOnLane],
   )
 
   // On the lane: schedule the next track to start on the exact sample the
