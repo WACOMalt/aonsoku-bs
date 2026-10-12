@@ -1,4 +1,5 @@
 import { httpClient } from '@/api/httpClient'
+import type { AcoustidResult } from '@/app/components/tagger/musicbrainz'
 import { useAppStore } from '@/store/app.store'
 import { SubsonicResponse } from '@/types/responses/subsonicResponse'
 import { getSyncAuth } from '@/utils/syncAuth'
@@ -132,6 +133,32 @@ async function lookup(path: string): Promise<Response> {
   return res
 }
 
+/** AcoustID's matches for a fingerprint (see musicbrainz.ts). */
+async function identify(
+  fingerprint: string,
+  duration: number,
+): Promise<AcoustidResult[]> {
+  const url = taggerUrl('acoustid/lookup')
+  const auth = getSyncAuth()
+  if (!url || !auth) throw new TaggerError('TAGGER_UNAVAILABLE')
+  let res: Response
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Tagger-Auth': btoa(JSON.stringify(auth)),
+      },
+      body: JSON.stringify({ fingerprint, duration }),
+    })
+  } catch {
+    throw new TaggerError('TAGGER_UNAVAILABLE')
+  }
+  const body = await res.json().catch(() => null)
+  if (!res.ok) throw new TaggerError(body?.error ?? 'UPSTREAM_UNAVAILABLE')
+  return body?.results ?? []
+}
+
 /** A picked image file as an upload: JPEG or PNG, up to 15 MB. */
 async function coverFromFile(file: Blob): Promise<CoverUpload> {
   if (file.type !== 'image/jpeg' && file.type !== 'image/png') {
@@ -151,5 +178,6 @@ export const tagger = {
   isAdmin,
   write,
   lookup,
+  identify,
   coverFromFile,
 }

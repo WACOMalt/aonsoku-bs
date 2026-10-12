@@ -12,6 +12,8 @@
 //   GET  /musicbrainz/<entity>[/<mbid>]?query…   MusicBrainz, as JSON
 //   GET  /coverart/<release|release-group>/<mbid>?size=250|500|1200
 //                       the front cover, from Cover Art Archive
+//   POST /acoustid/lookup { fingerprint, duration }: AcoustID's matches
+//                       (only with ACOUSTID_API_KEY)
 //   POST /write         { auth: <Subsonic credentials>, items: [...],
 //                         folderCover?: also replace each folder's cover image }
 //                       item: { songId, tags?: {...}, cover?: { mimeType, dataBase64 } }
@@ -53,7 +55,8 @@ function createTagger({
   verifyWithNavidrome,
   secret,
   userAgent = 'Aonsoku-BS-Tagger/1 ( https://github.com/WACOMalt/aonsoku-bs )',
-  lookup = createLookup({ userAgent }),
+  acoustidKey = '',
+  lookup = createLookup({ userAgent, acoustidKey }),
   log = console,
 }) {
   let plugin = null; // { socket, version, libraries }
@@ -113,7 +116,7 @@ function createTagger({
     return {
       enabled: !!plugin,
       pluginVersion: plugin?.version ?? null,
-      features: { write: writable, lookup: !!secret, fingerprint: false },
+      features: { write: writable, lookup: !!secret, fingerprint: !!secret && !!acoustidKey },
       libraries: plugin?.libraries ?? [],
     };
   }
@@ -239,6 +242,11 @@ function createTagger({
   async function handleLookup(req, res, route, params) {
     const refused = await checkHeaderAuth(req);
     if (refused) return json(res, ...refused);
+    if (route === 'acoustid/lookup') {
+      const body = await readJson(req);
+      const { status, body: reply } = await lookup.acoustid(body?.fingerprint, body?.duration);
+      return json(res, status, reply);
+    }
     if (route.startsWith('musicbrainz/')) {
       const { status, body } = await lookup.musicbrainz(route.slice('musicbrainz/'.length), params);
       return json(res, status, body);
@@ -281,7 +289,11 @@ function createTagger({
     const route = path.slice(ROUTE_PREFIX.length);
     if (req.method === 'GET' && route === 'capabilities') {
       json(res, 200, capabilities());
-    } else if (secret && req.method === 'GET' && (route.startsWith('musicbrainz/') || route.startsWith('coverart/'))) {
+    } else if (
+      secret &&
+      ((req.method === 'GET' && (route.startsWith('musicbrainz/') || route.startsWith('coverart/'))) ||
+        (req.method === 'POST' && route === 'acoustid/lookup' && acoustidKey))
+    ) {
       const params = new URL(req.url, 'http://x').searchParams;
       handleLookup(req, res, route, params).catch((err) => {
         log.warn('[Tagger] Lookup failed:', err.message);

@@ -100,6 +100,18 @@ Removing a user's admin flag in Navidrome locks them out at the next edit.
 - Identical covers in a batch go to the plugin once; it keeps them in its cache for the
   batch's tasks.
 
+## Fingerprints
+
+- "Identify by sound" (one song at a time) streams the song from Navidrome as a 128 kbps
+  MP3, reads about two minutes, decodes it with an OfflineAudioContext (nothing plays), and
+  computes the Chromaprint fingerprint in a Web Worker with `@unimusic/chromaprint`
+  (Chromaprint itself compiled to WebAssembly; its .wasm is a separate file, LGPL). On the
+  same audio it gives exactly the fingerprint ffmpeg's Chromaprint (= fpcalc) gives, so
+  the spec's fallback to a Rust port or fpcalc wasn't needed.
+- The server asks AcoustID (key in ACOUSTID_API_KEY, 3 requests a second, cached) and the
+  editor lists the matched recordings' releases; the chosen release maps the song by its
+  recording id.
+
 ## Testing
 
 - Local test bed: Navidrome 0.64.2 in Podman with a generated sample library (MP3, FLAC,

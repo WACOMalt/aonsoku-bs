@@ -115,6 +115,7 @@ const tagger = createTagger({
   navidromeUrl: NAVIDROME_URL,
   verifyWithNavidrome,
   secret: process.env.TAGGER_PLUGIN_SECRET || '',
+  acoustidKey: process.env.ACOUSTID_API_KEY || '',
   ...(process.env.TAGGER_USER_AGENT ? { userAgent: process.env.TAGGER_USER_AGENT } : {}),
 });
 

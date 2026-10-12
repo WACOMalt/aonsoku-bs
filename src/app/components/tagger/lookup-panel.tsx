@@ -9,8 +9,11 @@ import { Input } from '@/app/components/ui/input'
 import { Label } from '@/app/components/ui/label'
 import { TagEdit, TaggerError, tagger } from '@/service/tagger'
 import { ISong } from '@/types/responses/song'
+import { fingerprintSong } from './fingerprint'
 import {
   creditText,
+  FingerprintChoice,
+  fingerprintChoices,
   formats,
   MbRelease,
   MbReleaseSummary,
@@ -76,10 +79,14 @@ function ReleaseThumb({ id, className }: { id: string; className?: string }) {
   )
 }
 
+export type LookupMode = 'search' | 'identify'
+
 interface LookupPanelProps {
   songs: ISong[]
   album: string
   artist: string
+  /** Search by name, or identify the (one) song by its sound. */
+  mode?: LookupMode
   onApply: (choice: ReleaseChoice) => void
   onBack: () => void
 }
@@ -88,10 +95,14 @@ export function LookupPanel({
   songs,
   album: initialAlbum,
   artist: initialArtist,
+  mode: initialMode = 'search',
   onApply,
   onBack,
 }: LookupPanelProps) {
   const { t } = useTranslation()
+  const [mode, setMode] = useState<LookupMode>(initialMode)
+  const [stage, setStage] = useState<'listening' | 'asking' | null>(null)
+  const [matches, setMatches] = useState<FingerprintChoice[] | null>(null)
   const [album, setAlbum] = useState(initialAlbum)
   const [artist, setArtist] = useState(initialArtist)
   const [busy, setBusy] = useState(false)
@@ -127,13 +138,33 @@ export function LookupPanel({
     }
   }
 
-  // Searched at once with what the songs say.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: on open only
-  useEffect(() => {
-    search()
-  }, [])
+  async function identify(signal: AbortSignal) {
+    setBusy(true)
+    setError(null)
+    try {
+      setStage('listening')
+      const { fingerprint, duration } = await fingerprintSong(songs[0], signal)
+      setStage('asking')
+      const results = await tagger.identify(fingerprint, duration)
+      if (!signal.aborted) setMatches(fingerprintChoices(results))
+    } catch (e) {
+      if (!signal.aborted) fail(e)
+    } finally {
+      setStage(null)
+      setBusy(false)
+    }
+  }
 
-  async function pick(summary: MbReleaseSummary) {
+  // Searched at once: by what the songs say, or by the song's sound.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on opening a mode
+  useEffect(() => {
+    const controller = new AbortController()
+    if (mode === 'identify') identify(controller.signal)
+    else search()
+    return () => controller.abort()
+  }, [mode])
+
+  async function pick(summary: MbReleaseSummary, recordingId?: string) {
     setBusy(true)
     setError(null)
     try {
@@ -144,8 +175,10 @@ export function LookupPanel({
         `musicbrainz/release/${summary.id}?${params}`,
       )
       const full = (await res.json()) as MbRelease
+      // The recording the fingerprint found maps the song exactly.
+      const known = recordingId ? { [songs[0].id]: recordingId } : {}
       setRelease(full)
-      setMapping(matchTracks(songs, releaseTracks(full)))
+      setMapping(matchTracks(songs, releaseTracks(full), known))
     } catch (e) {
       fail(e)
     } finally {
@@ -246,6 +279,76 @@ export function LookupPanel({
             {busy && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {t('tagger.lookup.apply')}
           </Button>
+        </div>
+      </div>
+    )
+  }
+
+  if (mode === 'identify') {
+    return (
+      <div className="p-6 space-y-4">
+        {stage && (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            {t(`tagger.identify.${stage}`)}
+          </p>
+        )}
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {matches && matches.length === 0 && (
+          <p className="text-sm text-muted-foreground">
+            {t('tagger.identify.nothing')}
+          </p>
+        )}
+        {matches && matches.length > 0 && (
+          <div className="rounded-md border divide-y">
+            {matches.map((m) => (
+              <button
+                key={m.release.id}
+                type="button"
+                className="w-full flex items-center gap-3 p-2 text-left hover:bg-accent disabled:opacity-50"
+                onClick={() => pick(m.release, m.recordingId)}
+                disabled={busy}
+              >
+                <ReleaseThumb id={m.release.id} className="w-12 h-12" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">
+                    {m.release.title}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {[
+                      creditText(m.release['artist-credit']),
+                      m.release.date,
+                      m.release.country,
+                      m.release['track-count'] &&
+                        t('tagger.lookup.tracks', {
+                          count: m.release['track-count'],
+                        }),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {t('tagger.identify.match', {
+                      title: m.recordingTitle,
+                      score: Math.round(m.score * 100),
+                    })}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex justify-between gap-2">
+          <Button variant="ghost" onClick={onBack} disabled={!!stage}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            {t('tagger.lookup.back')}
+          </Button>
+          {!stage && (
+            <Button variant="outline" onClick={() => setMode('search')}>
+              <Search className="mr-2 h-4 w-4" />
+              {t('tagger.identify.byName')}
+            </Button>
+          )}
         </div>
       </div>
     )

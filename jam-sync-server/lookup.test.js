@@ -111,3 +111,81 @@ test('a release without a cover says so, and bad requests are refused', async ()
   assert.equal((await lookup.coverArt('artist', MBID, '500')).status, 400);
   assert.equal((await lookup.coverArt('release', 'nope', '500')).status, 400);
 });
+
+test('AcoustID gets the key, the fingerprint and three requests a second at most', async () => {
+  const calls = [];
+  const impl = async (url, options) => {
+    calls.push({ url, at: Date.now(), body: new URLSearchParams(options.body) });
+    return new Response(
+      JSON.stringify({
+        status: 'ok',
+        results: [
+          { id: 'low', score: 0.4, recordings: [{ id: 'r2', title: 'Other' }] },
+          { id: 'none', score: 0.9 },
+          {
+            id: 'best',
+            score: 0.97,
+            recordings: [
+              {
+                id: 'r1',
+                title: 'Time',
+                duration: 413,
+                artists: [{ id: 'a', name: 'Pink Floyd' }],
+                releases: [{ id: 'rel1', title: 'The Dark Side of the Moon', country: 'GB', date: { year: 1973 }, track_count: 10, medium_count: 1 }],
+              },
+            ],
+          },
+        ],
+      }),
+      { status: 200 },
+    );
+  };
+  const lookup = createLookup({ userAgent: 'Test', fetchImpl: impl, acoustidKey: 'KEY', acoustidIntervalMs: 100 });
+  const fp = 'AQAAE0mUaEkSRZEGAA';
+  const [a, b] = await Promise.all([lookup.acoustid(fp, 413.6), lookup.acoustid(`${fp}x`, 413)]);
+  assert.equal(a.status, 200);
+  assert.ok(calls[1].at - calls[0].at >= 90, 'spaced out');
+  assert.equal(calls[0].url, 'https://api.acoustid.org/v2/lookup');
+  assert.equal(calls[0].body.get('client'), 'KEY');
+  assert.equal(calls[0].body.get('duration'), '414');
+  assert.equal(calls[0].body.get('fingerprint'), fp);
+  assert.deepEqual(a.body.results, [
+    {
+      score: 0.97,
+      recordings: [
+        {
+          id: 'r1',
+          title: 'Time',
+          duration: 413,
+          artists: [{ name: 'Pink Floyd', joinphrase: '' }],
+          releases: [{ id: 'rel1', title: 'The Dark Side of the Moon', country: 'GB', year: 1973, trackCount: 10, mediumCount: 1 }],
+        },
+      ],
+    },
+    { score: 0.4, recordings: [{ id: 'r2', title: 'Other', duration: null, artists: [], releases: [] }] },
+  ]);
+  assert.equal(b.status, 200);
+
+  await lookup.acoustid(fp, 414);
+  assert.equal(calls.length, 2, 'the repeat came from the cache');
+});
+
+test('AcoustID lookups are checked, and need the key', async () => {
+  const lookup = createLookup({ userAgent: 'Test', fetchImpl: async () => new Response('{}'), acoustidKey: 'KEY' });
+  assert.equal((await lookup.acoustid('not a fingerprint!', 200)).status, 400);
+  assert.equal((await lookup.acoustid('AQAAE0mUaEkSRZEGAA', 0)).status, 400);
+  const noKey = createLookup({ userAgent: 'Test', fetchImpl: async () => new Response('{}') });
+  assert.equal((await noKey.acoustid('AQAAE0mUaEkSRZEGAA', 200)).status, 404);
+});
+
+test('a refused AcoustID lookup is reported as unavailable', async () => {
+  const impl = async () => new Response(JSON.stringify({ status: 'error', error: { message: 'invalid API key' } }));
+  const lookup = createLookup({ userAgent: 'Test', fetchImpl: impl, acoustidKey: 'BAD' });
+  const warn = console.warn;
+  console.warn = () => {};
+  try {
+    assert.deepEqual(await lookup.acoustid('AQAAE0mUaEkSRZEGAA', 200), { status: 502, body: { error: 'UPSTREAM_UNAVAILABLE' } });
+  } finally {
+    console.warn = warn;
+  }
+});

@@ -964,7 +964,8 @@
       "COVER_TYPE": "Covers must be JPEG or PNG images.",
       "COVER_TOO_LARGE": "Covers can be at most 15 MB.",
       "UPSTREAM_UNAVAILABLE": "The lookup service isn't reachable right now.",
-      "MUSICBRAINZ_BUSY": "MusicBrainz is busy right now. Try again in a moment."
+      "MUSICBRAINZ_BUSY": "MusicBrainz is busy right now. Try again in a moment.",
+      "FINGERPRINT_FAILED": "The song couldn't be listened to. Try again, or search by name."
     },
     "lookup": {
       "open": "Look up on MusicBrainz",
@@ -980,6 +981,14 @@
       "back": "Back to the tags",
       "perSong": "Per song, from {{release}}:",
       "noCover": "The release's cover couldn't be downloaded right now, so it was left out. Choose an image, or try again later."
+    },
+    "identify": {
+      "open": "Identify by sound",
+      "listening": "Listening to the song…",
+      "asking": "Asking AcoustID…",
+      "nothing": "AcoustID doesn't know this recording.",
+      "byName": "Search by name instead",
+      "match": "Matches “{{title}}” ({{score}}%)"
     }
   }
 }

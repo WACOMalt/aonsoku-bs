@@ -110,6 +110,9 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.13.6
         version: 3.13.6(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@unimusic/chromaprint':
+        specifier: 0.1.4
+        version: 0.1.4
       '@virtual-grid/react':
         specifier: ^2.0.3
         version: 2.0.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -2641,6 +2644,9 @@ packages:
     resolution: {integrity: sha512-WmoN8qaIAo7WTYWbAZuG8PYEhn5fkz7dZrqTBZ7dtt//lL2Gwms1IcnQ5yHqjDfX8Ft5j4YzDM23f87zBfDe9g==}
     deprecated: Potential CWE-502 - Update to 1.3.1 or higher
 
+  '@unimusic/chromaprint@0.1.4':
+    resolution: {integrity: sha512-li+/NUjgvvPNEcWK1+72pxXT/vtfNpwWW2QNrh9+uccJ7tGT0Lnn0XCx9P+Sjnl9vJ2qa03dQYKV9w/i8o6Yww==}
+
   '@virtual-grid/core@2.0.1':
     resolution: {integrity: sha512-ZqhtuVGMVM89W/8PFljGqaWV0f8Jce+x68y4hWXpgCHlhSwpGrAKE5awgG1qHDsbTcM0kv1cL88KOFWknbnyWQ==}
 
@@ -4380,10 +4386,6 @@ packages:
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
-
-  lru-cache@11.2.4:
-    resolution: {integrity: sha512-B5Y16Jr9LB9dHVkh6ZevG+vAbOsNOYCX+sXvFWFu7B3Iz5mijW3zdbMyhsh8ANd2mSWBYdJgnqi+mL7/LrOPYg==}
-    engines: {node: 20 || >=22}
 
   lru-cache@11.5.3:
     resolution: {integrity: sha512-U4N8FgzmWxc8k1VH8Kr6lQg18U7Fjvby6wXHVRX/ZZ7IwWbRMgrRbP0Wrb5q5NVinryp4SQampHKdvtecItxUg==}
@@ -8645,6 +8647,8 @@ snapshots:
 
   '@ungap/structured-clone@1.3.0': {}
 
+  '@unimusic/chromaprint@0.1.4': {}
+
   '@virtual-grid/core@2.0.1': {}
 
   '@virtual-grid/react@2.0.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
@@ -10689,8 +10693,6 @@ snapshots:
 
   lru-cache@10.4.3: {}
 
-  lru-cache@11.2.4: {}
-
   lru-cache@11.5.3: {}
 
   lru-cache@5.1.1:
@@ -11343,7 +11345,7 @@ snapshots:
 
   path-scurry@2.0.1:
     dependencies:
-      lru-cache: 11.2.4
+      lru-cache: 11.5.3
       minipass: 7.1.3
 
   pathe@2.0.3: {}

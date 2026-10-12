@@ -96,9 +96,14 @@ sync_server() {
   fi
   mkdir -p "$TESTBED/sync-data"
   (cd "$REPO/jam-sync-server" && [ -d node_modules ] || npm install --no-audit --no-fund --silent)
+  secret >/dev/null
   cd "$REPO/jam-sync-server"
-  TAGGER_PLUGIN_SECRET=$(secret) NAVIDROME_URL=http://127.0.0.1:$PORT \
-    SYNC_DATA_DIR=$TESTBED/sync-data nohup node index.js > "$TESTBED/sync.log" 2>&1 &
+  # sync.env: TAGGER_PLUGIN_SECRET, and ACOUSTID_API_KEY when there is one.
+  set -a
+  . "$TESTBED/sync.env"
+  set +a
+  NAVIDROME_URL=http://127.0.0.1:$PORT SYNC_DATA_DIR=$TESTBED/sync-data \
+    nohup node index.js > "$TESTBED/sync.log" 2>&1 &
   echo $! > "$pidfile"
   echo "Sync server on :7548 (log: $TESTBED/sync.log)"
 }

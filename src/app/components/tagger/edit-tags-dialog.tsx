@@ -1,6 +1,13 @@
 import { useQueryClient } from '@tanstack/react-query'
 import clsx from 'clsx'
-import { ImageIcon, Loader2, RotateCcw, Search, X } from 'lucide-react'
+import {
+  AudioLines,
+  ImageIcon,
+  Loader2,
+  RotateCcw,
+  Search,
+  X,
+} from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'react-toastify'
@@ -31,7 +38,7 @@ import {
 import { useTaggerActions, useTaggerStore } from '@/store/tagger.store'
 import { ISong } from '@/types/responses/song'
 import { buildItems, initialValues, isEditable, validate } from './fields'
-import { LookupPanel, ReleaseChoice } from './lookup-panel'
+import { LookupMode, LookupPanel, ReleaseChoice } from './lookup-panel'
 
 // Navidrome needs a moment to rescan the edited folders.
 const REFRESH_AFTER_MS = [1500, 6000]
@@ -102,7 +109,10 @@ function EditTagsForm({
   const canLookUp = useTaggerStore(
     (state) => !!state.capabilities?.features.lookup,
   )
-  const [lookingUp, setLookingUp] = useState(false)
+  const canIdentify = useTaggerStore(
+    (state) => !!state.capabilities?.features.fingerprint,
+  )
+  const [lookingUp, setLookingUp] = useState<LookupMode | null>(null)
   // A batch's per-song edits from MusicBrainz (title, track…).
   const [perSong, setPerSong] = useState<Record<string, TagEdit>>({})
   const [fromRelease, setFromRelease] = useState<string | null>(null)
@@ -172,7 +182,7 @@ function EditTagsForm({
       [release.title, release.date?.slice(0, 4)].filter(Boolean).join(', '),
     )
     if (cover) pickCover(cover)
-    setLookingUp(false)
+    setLookingUp(null)
   }
 
   function errorText(error: unknown) {
@@ -238,8 +248,9 @@ function EditTagsForm({
             songs={songs}
             album={initial.album ?? first.album ?? ''}
             artist={initial.albumArtist || initial.artist || first.artist || ''}
+            mode={lookingUp}
             onApply={applyRelease}
-            onBack={() => setLookingUp(false)}
+            onBack={() => setLookingUp(null)}
           />
         ) : (
           <>
@@ -283,10 +294,22 @@ function EditTagsForm({
                     variant="outline"
                     size="sm"
                     className="w-full h-auto min-h-9 py-1.5 whitespace-normal"
-                    onClick={() => setLookingUp(true)}
+                    onClick={() => setLookingUp('search')}
                   >
                     <Search className="mr-2 h-4 w-4" />
                     {t('tagger.lookup.open')}
+                  </Button>
+                )}
+                {canIdentify && !batch && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full h-auto min-h-9 py-1.5 whitespace-normal"
+                    onClick={() => setLookingUp('identify')}
+                  >
+                    <AudioLines className="mr-2 h-4 w-4 shrink-0" />
+                    {t('tagger.identify.open')}
                   </Button>
                 )}
                 {cover && (

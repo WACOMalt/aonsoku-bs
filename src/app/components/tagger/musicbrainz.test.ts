@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { ISong } from '@/types/responses/song'
 import {
   creditText,
+  fingerprintChoices,
   MbRelease,
   matchTracks,
   releaseEdits,
@@ -164,5 +165,86 @@ describe('releaseEdits', () => {
         discNumber: '2/2',
       },
     })
+  })
+})
+
+describe('matchTracks with a fingerprint', () => {
+  it('maps a song to the recording a fingerprint found, whatever its tags', () => {
+    const withRecordings: MbRelease = {
+      ...release,
+      media: [
+        {
+          position: 1,
+          'track-count': 2,
+          tracks: [
+            { position: 1, title: 'Speak to Me', recording: { id: 'rec-a' } },
+            { position: 2, title: 'Breathe', recording: { id: 'rec-b' } },
+          ],
+        },
+      ],
+    }
+    expect(
+      matchTracks([song('x', 'Track 01', 1)], releaseTracks(withRecordings), {
+        x: 'rec-b',
+      }),
+    ).toEqual({ x: '1-2' })
+  })
+})
+
+describe('fingerprintChoices', () => {
+  it('lists each release once, best match and oldest first', () => {
+    const artists = [{ name: 'Pink Floyd' }]
+    const choices = fingerprintChoices([
+      {
+        score: 0.95,
+        recordings: [
+          {
+            id: 'rec1',
+            title: 'Time',
+            artists,
+            releases: [
+              {
+                id: 'cd',
+                title: 'DSOTM',
+                country: 'GB',
+                year: 1984,
+                trackCount: 10,
+              },
+              {
+                id: 'lp',
+                title: 'DSOTM',
+                country: 'GB',
+                year: 1973,
+                trackCount: 10,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        score: 0.5,
+        recordings: [
+          {
+            id: 'rec2',
+            title: 'Time (live)',
+            artists,
+            releases: [
+              {
+                id: 'cd',
+                title: 'DSOTM',
+                country: 'GB',
+                year: 1984,
+                trackCount: 10,
+              },
+            ],
+          },
+        ],
+      },
+    ])
+    expect(choices.map((c) => [c.release.id, c.recordingId, c.score])).toEqual([
+      ['lp', 'rec1', 0.95],
+      ['cd', 'rec1', 0.95],
+    ])
+    expect(choices[0].release.date).toBe('1973')
   })
 })
