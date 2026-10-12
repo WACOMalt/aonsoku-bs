@@ -13,6 +13,7 @@ import {
   PodcastIcon,
   Radio,
   ShareIcon,
+  Tags,
   Trash,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -195,6 +196,19 @@ function SongInfo({ variant = 'dropdown', ...props }: DropdownMenuItemProps) {
   )
 }
 
+function EditTags({ variant = 'dropdown', ...props }: DropdownMenuItemProps) {
+  const { t } = useTranslation()
+
+  return (
+    <MenuItemFactory
+      variant={variant}
+      icon={<Tags className="mr-2 h-4 w-4" />}
+      label={t('options.editTags')}
+      {...props}
+    />
+  )
+}
+
 function MarkAsPlayed({
   variant = 'dropdown',
   ...props
@@ -259,6 +273,7 @@ export const OptionsButtons = {
   RemovePlaylist,
   RemoveFromPlaylist,
   SongInfo,
+  EditTags,
   MarkAsPlayed,
   GotoPodcast,
   Share,

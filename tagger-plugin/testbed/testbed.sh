@@ -6,10 +6,14 @@
 #   testbed.sh start     start Navidrome on http://localhost:4533
 #   testbed.sh stop      stop and remove the container
 #   testbed.sh logs      follow Navidrome's log
+#   testbed.sh sync      (re)start the sync server from this checkout on :7548
+#   testbed.sh plugin    build the plugin for the test bed, install and enable it
+#   testbed.sh api …     call Navidrome's native API as the admin (ndadmin.py)
 #
 # Everything lives in $TESTBED (default ~/aonsoku-tagger-testbed): music/,
-# data/ (Navidrome's database, plugins/) and admin.env (the test admin's
-# credentials, created on first start).
+# data/ (Navidrome's database, plugins/), admin.env (the test admin's and a
+# non-admin "guest"'s credentials), sync.env (the plugin secret) and
+# sync.log.
 set -euo pipefail
 
 TESTBED=${TESTBED:-$HOME/aonsoku-tagger-testbed}
@@ -73,10 +77,52 @@ start() {
   echo "Navidrome on http://localhost:$PORT (admin credentials in $TESTBED/admin.env)"
 }
 
+HERE=$(cd "$(dirname "$0")" && pwd)
+REPO=$(cd "$HERE/../.." && pwd)
+
+secret() {
+  if [ ! -f "$TESTBED/sync.env" ]; then
+    printf 'TAGGER_PLUGIN_SECRET=%s\n' "$(head -c 24 /dev/urandom | base64 | tr -d '/+=')" > "$TESTBED/sync.env"
+    chmod 600 "$TESTBED/sync.env"
+  fi
+  sed -n 's/^TAGGER_PLUGIN_SECRET=//p' "$TESTBED/sync.env"
+}
+
+sync_server() {
+  local pidfile=$TESTBED/sync.pid
+  if [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    kill "$(cat "$pidfile")"
+    sleep 1
+  fi
+  mkdir -p "$TESTBED/sync-data"
+  (cd "$REPO/jam-sync-server" && [ -d node_modules ] || npm install --no-audit --no-fund --silent)
+  cd "$REPO/jam-sync-server"
+  TAGGER_PLUGIN_SECRET=$(secret) NAVIDROME_URL=http://127.0.0.1:$PORT \
+    SYNC_DATA_DIR=$TESTBED/sync-data nohup node index.js > "$TESTBED/sync.log" 2>&1 &
+  echo $! > "$pidfile"
+  echo "Sync server on :7548 (log: $TESTBED/sync.log)"
+}
+
+plugin() {
+  (cd "$REPO/tagger-plugin" && TAGGER_SYNC_HOST=host.containers.internal TAGGER_EXTRA_HOSTS='*' ./build.sh)
+  mkdir -p "$TESTBED/data/plugins"
+  cp "$REPO/tagger-plugin/dist/aonsoku-bs-tagger.ndp" "$TESTBED/data/plugins/"
+  # Navidrome unloads a changed plugin and leaves it disabled.
+  sleep 4
+  local config
+  config=$(python3 -c "import json,sys; print(json.dumps(json.dumps({'syncServerUrl':'http://host.containers.internal:7548','secret':sys.argv[1],'scanUser':'admin'})))" "$(secret)")
+  "$HERE/ndadmin.py" PUT /api/plugin/aonsoku-bs-tagger \
+    "{\"config\": $config, \"allUsers\": true, \"allLibraries\": true, \"allowWriteAccess\": true}" >/dev/null
+  "$HERE/ndadmin.py" PUT /api/plugin/aonsoku-bs-tagger '{"enabled": true}' | grep -o '"enabled": [a-z]*\|"lastError": "[^"]*"'
+}
+
 case "${1:-}" in
   library) library ;;
   start) start ;;
   stop) podman rm -f "$NAME" >/dev/null && echo stopped ;;
   logs) podman logs -f "$NAME" ;;
-  *) echo "usage: $0 library|start|stop|logs" >&2; exit 1 ;;
+  sync) sync_server ;;
+  plugin) plugin ;;
+  api) shift; "$HERE/ndadmin.py" "$@" ;;
+  *) echo "usage: $0 library|start|stop|logs|sync|plugin|api" >&2; exit 1 ;;
 esac

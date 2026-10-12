@@ -528,7 +528,8 @@
       "episode": "Go to episode",
       "podcast": "Go to podcast"
     },
-    "share": "Share"
+    "share": "Share",
+    "editTags": "Edit tags"
   },
   "radios": {
     "label": "Radio",
@@ -912,5 +913,57 @@
     "failed": "Couldn't copy the link.",
     "privatePlaylist": "This playlist is private, so only you can open the link.",
     "songNotFound": "That song isn't on your server."
+  },
+  "tagger": {
+    "title": "Edit tags",
+    "songCount_one": "{{count}} song",
+    "songCount_other": "{{count}} songs",
+    "fields": {
+      "title": "Title",
+      "artist": "Artist",
+      "albumArtist": "Album artist",
+      "album": "Album",
+      "trackNumber": "Track",
+      "discNumber": "Disc",
+      "year": "Year",
+      "genre": "Genre"
+    },
+    "multipleValues": "Multiple values",
+    "perSong": "Kept per song",
+    "reset": "Undo this change",
+    "invalid": {
+      "number": "A number, or one like 3/12",
+      "year": "A year like 1999, or a date like 1999-05-03"
+    },
+    "cover": {
+      "choose": "Choose image…",
+      "keep": "Keep the current cover",
+      "new": "New",
+      "folder": "Also replace the folder's cover image",
+      "folderSingle": "Also replace the cover image of this song's folder"
+    },
+    "save": "Save",
+    "saving": "Saving…",
+    "cancel": "Cancel",
+    "saved_one": "Saved the tags of {{count}} song.",
+    "saved_other": "Saved the tags of {{count}} songs.",
+    "failed_one": "{{count}} song could not be saved:",
+    "failed_other": "{{count}} songs could not be saved:",
+    "errors": {
+      "UNAUTHORIZED": "Your sign-in could not be checked. Sign in again and retry.",
+      "FORBIDDEN": "Only Navidrome admins can edit tags.",
+      "TAGGER_UNAVAILABLE": "The tag editor isn't reachable right now. Try again in a minute.",
+      "TAGGER_TIMEOUT": "The music server took too long. Some songs may have been saved.",
+      "PLUGIN_DISCONNECTED": "The connection to the music server dropped. Some songs may have been saved.",
+      "NAVIDROME_UNAVAILABLE": "Navidrome isn't reachable right now.",
+      "FILE_NOT_FOUND": "the file wasn't found",
+      "PATH_OUTSIDE_ROOT": "the file is outside the music library",
+      "UNSUPPORTED_FORMAT": "this file type can't be tagged",
+      "VALIDATION_FAILED": "a value was not accepted",
+      "WRITE_FAILED": "the file could not be written",
+      "COVER_TYPE": "Covers must be JPEG or PNG images.",
+      "COVER_TOO_LARGE": "Covers can be at most 15 MB.",
+      "UPSTREAM_UNAVAILABLE": "The lookup service isn't reachable right now."
+    }
   }
 }

@@ -8,6 +8,7 @@ import {
 } from '@/app/components/ui/dropdown-menu'
 import { useOptions } from '@/app/hooks/use-options'
 import { useAppStore } from '@/store/app.store'
+import { useCanEditTags, useTaggerActions } from '@/store/tagger.store'
 import { SingleAlbum } from '@/types/responses/album'
 import { shareItem } from '@/utils/shareLinks'
 
@@ -17,6 +18,8 @@ interface AlbumOptionsProps {
 
 export function AlbumOptions({ album }: AlbumOptionsProps) {
   const hidePlaylistsSection = useAppStore().pages.hidePlaylistsSection
+  const canEditTags = useCanEditTags()
+  const { openEditor } = useTaggerActions()
   const {
     playNext,
     playLast,
@@ -80,6 +83,9 @@ export function AlbumOptions({ album }: AlbumOptionsProps) {
       <KeepCachedOption kind="album" id={album.id} />
       <DropdownMenuSeparator />
       <OptionsButtons.Share onClick={handleShare} />
+      {canEditTags && (
+        <OptionsButtons.EditTags onClick={() => openEditor(album.song, true)} />
+      )}
     </>
   )
 }

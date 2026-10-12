@@ -12,6 +12,7 @@ import { CreatePlaylistDialog } from '@/app/components/playlist/form-dialog'
 import { RemovePlaylistDialog } from '@/app/components/playlist/remove-dialog'
 import { AppSidebar } from '@/app/components/sidebar/app-sidebar'
 import { SongInfoDialog } from '@/app/components/song/info-dialog'
+import { EditTagsDialog } from '@/app/components/tagger/edit-tags-dialog'
 import {
   MainSidebarInset,
   MainSidebarProvider,
@@ -20,6 +21,7 @@ import { useConnect } from '@/app/hooks/use-connect'
 import { useJamRejoin } from '@/app/hooks/use-jam-rejoin'
 import { useSharedLinkOpener } from '@/app/hooks/use-shared-link'
 import { Header } from '@/app/layout/header'
+import { TaggerObserver } from '@/app/observers/tagger-observer'
 import { MainRoutes } from './main'
 
 const MemoHeader = memo(Header)
@@ -55,6 +57,8 @@ export default function BaseLayout() {
       <JamEndPrompt />
       <OnlineChoicePrompt />
       <FriendsDialog />
+      <TaggerObserver />
+      <EditTagsDialog />
       {/* Search: one dialog, opened from the sidebar, tab bar or shortcut. */}
       <CommandMenu />
     </div>

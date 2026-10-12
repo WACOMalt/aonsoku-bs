@@ -4,6 +4,7 @@ import { KeepCachedOption } from '@/app/components/options/keep-cached-option'
 import { ContextMenuSeparator } from '@/app/components/ui/context-menu'
 import { songFileName, useOptions } from '@/app/hooks/use-options'
 import { useAppStore } from '@/store/app.store'
+import { useCanEditTags, useTaggerActions } from '@/store/tagger.store'
 import { ISong } from '@/types/responses/song'
 import { checkServerType } from '@/utils/servers'
 import { shareItem } from '@/utils/shareLinks'
@@ -32,6 +33,8 @@ export function SongMenuOptions({
     isOnPlaylistPage,
   } = useOptions()
   const hidePlaylistsSection = useAppStore().pages.hidePlaylistsSection
+  const canEditTags = useCanEditTags()
+  const { openEditor } = useTaggerActions()
   const { isNavidrome } = checkServerType()
   const songIndexes = [index.toString()]
 
@@ -114,6 +117,15 @@ export function SongMenuOptions({
           openSongInfo(song.id)
         }}
       />
+      {canEditTags && (
+        <OptionsButtons.EditTags
+          variant={variant}
+          onClick={(e) => {
+            e.stopPropagation()
+            openEditor([song])
+          }}
+        />
+      )}
     </>
   )
 }
