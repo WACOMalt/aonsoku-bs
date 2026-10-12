@@ -1,5 +1,5 @@
 {
-  "name": "aonsoku",
+  "name": "aonsoku-bs",
   "private": true,
   "version": "0.20.1",
   "description": "A modern desktop client for Navidrome/Subsonic servers.",
@@ -8,7 +8,7 @@
   },
   "main": "./out/main/index.js",
   "type": "module",
-  "productName": "Aonsoku",
+  "productName": "Aonsoku-BS",
   "scripts": {
     "dev": "vite",
     "build": "pnpm typecheck && vite build",
@@ -36,7 +36,7 @@
     "prepare": "husky"
   },
   "repository": {
-    "url": "https://github.com/victoralvesf/aonsoku"
+    "url": "https://github.com/WACOMalt/aonsoku-bs"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

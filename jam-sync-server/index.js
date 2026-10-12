@@ -870,4 +870,4 @@ async function handleUserSync(req, res) {
 
 httpServer.listen(7548);
 
-console.log('Aonsoku Jam Sync Server running on port 7548');
+console.log('Aonsoku-BS Jam Sync Server running on port 7548');

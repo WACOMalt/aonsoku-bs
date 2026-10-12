@@ -4,7 +4,7 @@ import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
   appId: 'xyz.bsums.aonsoku',
-  appName: 'Aonsoku',
+  appName: 'Aonsoku-BS',
   webDir: 'dist',
   server: {
     androidScheme: 'https',

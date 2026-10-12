@@ -4,7 +4,7 @@
 // users that are no longer in Navidrome (with their friends and invites).
 //
 // Run it inside the container, as a Navidrome admin:
-//   docker exec -it aonsoku node /opt/jam-sync-server/sync-users.js [--prune]
+//   docker exec -it aonsoku-bs node /opt/jam-sync-server/sync-users.js [--prune]
 //
 // It asks for the admin's username and password (the password isn't shown
 // as you type) and sends them once to the running sync server, which signs
@@ -52,7 +52,7 @@ async function main() {
     });
   } catch (err) {
     console.error(`Couldn't reach the sync server at ${SERVER}: ${err.message}`);
-    console.error('Run this inside the Aonsoku container (docker exec -it aonsoku ...).');
+    console.error('Run this inside the Aonsoku-BS container (docker exec -it aonsoku-bs ...).');
     process.exit(1);
   }
   const result = await response.json().catch(() => ({}));

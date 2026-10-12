@@ -68,7 +68,7 @@ jobs:
             echo "Release $TAG already exists"
           else
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
-              --draft --title "Aonsoku $TAG" --generate-notes
+              --draft --title "Aonsoku-BS $TAG" --generate-notes
           fi
 
   desktop:
@@ -189,7 +189,7 @@ jobs:
           TAG: ${{ needs.prepare.outputs.tag }}
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          ASSET="Aonsoku-${VERSION}-web.zip"
+          ASSET="Aonsoku-BS-${VERSION}-web.zip"
           (cd dist && zip -qr "../$ASSET" .)
           ls -la "$ASSET"
           gh release upload "$TAG" "$ASSET" --repo "$GITHUB_REPOSITORY" --clobber
@@ -260,9 +260,9 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           if [[ "$HAS_KEYSTORE" == "true" ]]; then
-            ASSET="Aonsoku-${VERSION}-android.apk"
+            ASSET="Aonsoku-BS-${VERSION}-android.apk"
           else
-            ASSET="Aonsoku-${VERSION}-android-debugsigned.apk"
+            ASSET="Aonsoku-BS-${VERSION}-android-debugsigned.apk"
           fi
           cp android/app/build/outputs/apk/release/app-release.apk "$ASSET"
           ls -la "$ASSET"

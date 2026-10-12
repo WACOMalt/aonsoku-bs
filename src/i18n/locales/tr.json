@@ -664,7 +664,7 @@
     "privacy": {
       "services": {
         "group": "Harici Hizmetler",
-        "description": "Aonsoku'nun erişebileceği harici hizmetleri yönetin.",
+        "description": "Aonsoku-BS'nun erişebileceği harici hizmetleri yönetin.",
         "lrclib": {
           "info": "LRCLIB şarkı sözlerini bulmak için kullanılır.",
           "label": "LRCLIB"

@@ -32,7 +32,7 @@ final class AonsokuServer {
     private static final String PREFS = "aonsoku_server";
     // The salt the web app hashes its token with (src/utils/salt.ts).
     private static final String SALT = "40n50kuPl4y3r";
-    private static final String CLIENT = "Aonsoku";
+    private static final String CLIENT = "Aonsoku-BS";
     private static final int TIMEOUT_MS = 15000;
 
     /** Told when the sign-in changes, on the main thread. */

@@ -1,8 +1,8 @@
 version: '3.8'
 
 services:
-  aonsoku:
-    container_name: aonsoku
+  aonsoku-bs:
+    container_name: aonsoku-bs
     build: .
     restart: unless-stopped
     ports:

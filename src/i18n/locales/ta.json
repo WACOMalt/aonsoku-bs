@@ -681,7 +681,7 @@
     "privacy": {
       "services": {
         "group": "வெளி சேவைகள்",
-        "description": "Aonsoku அணுகக்கூடிய வெளிப்புற சேவைகளை நிர்வகிக்கவும்.",
+        "description": "Aonsoku-BS அணுகக்கூடிய வெளிப்புற சேவைகளை நிர்வகிக்கவும்.",
         "lrclib": {
           "info": "பாடல் வரிகளைக் கண்டறிய LRCLIB பயன்படுகிறது.",
           "label": "LRCLIB",

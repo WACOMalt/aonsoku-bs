@@ -679,7 +679,7 @@
             "example": "示例：https://my-lrclib.com"
           }
         },
-        "description": "管理 Aonsoku 可以访问的外部服务。",
+        "description": "管理 Aonsoku-BS 可以访问的外部服务。",
         "animatedCover": {
           "enabled": {
             "label": "启用动画封面",

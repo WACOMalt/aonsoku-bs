@@ -823,7 +823,7 @@
             "example": "Ejemplo: https://my-lrclib.com"
           }
         },
-        "description": "Organiza los servicios externos a los que Aonsoku puede acceder.",
+        "description": "Organiza los servicios externos a los que Aonsoku-BS puede acceder.",
         "animatedCover": {
           "enabled": {
             "label": "Habilita coberturas animadas",

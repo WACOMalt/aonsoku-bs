@@ -183,7 +183,10 @@ const androidUpdates: UpdateSource = {
     }
     const { needsPermission } = await AppUpdate.install()
     if (needsPermission) {
-      throw new UpdateError('needs-permission', 'Allow Aonsoku to install apps')
+      throw new UpdateError(
+        'needs-permission',
+        'Allow Aonsoku-BS to install apps',
+      )
     }
   },
   async grantPermission() {

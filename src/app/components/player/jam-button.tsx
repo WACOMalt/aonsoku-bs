@@ -96,7 +96,7 @@ export function JamButton() {
     // A path link (not #/jam/...) so the Android app can claim it.
     shareUrl({
       url: buildJamInviteLink(jamId!),
-      title: 'Join my Jam on Aonsoku',
+      title: 'Join my Jam on Aonsoku-BS',
       copiedMessage: 'Invite link copied!',
     })
   }

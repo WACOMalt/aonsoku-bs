@@ -1,6 +1,6 @@
 import { repository, version } from '@/../package.json'
 
-export const appName = 'Aonsoku'
+export const appName = 'Aonsoku-BS'
 
 export function getAppInfo() {
   return {

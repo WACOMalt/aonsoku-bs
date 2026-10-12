@@ -1,5 +1,7 @@
+# The appId stays the original one: Windows knows the installed app by it,
+# so an update replaces the old install instead of adding a second one.
 appId: com.victoralvesf.aonsoku
-productName: Aonsoku
+productName: Aonsoku-BS
 copyright: Copyright © 2026 Victor Alves
 icon: ./build/icon.ico
 artifactName: '${productName}-v${version}-${os}-${arch}.${ext}'
@@ -18,7 +20,7 @@ extraResources:
     to: resources
 
 win:
-  executableName: Aonsoku
+  executableName: Aonsoku-BS
   target:
     - target: nsis
       arch:
@@ -57,13 +59,21 @@ linux:
         - x64
         - arm64
     - deb
+  executableName: aonsoku-bs
   maintainer: victoralvesf
   category: AudioVideo
   synopsis: 'A modern desktop music client for Navidrome and OpenSubsonic servers.'
 
+# The package was called "aonsoku" before "aonsoku-bs": installing it
+# replaces that one rather than clashing with it.
+deb:
+  fpm:
+    - --replaces=aonsoku
+    - --conflicts=aonsoku
+
 # aonsoku://jam/<id> invite links open in the desktop app.
 protocols:
-  - name: Aonsoku Jam
+  - name: Aonsoku-BS Jam
     schemes:
       - aonsoku
 

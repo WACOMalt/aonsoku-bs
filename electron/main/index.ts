@@ -1,3 +1,6 @@
+// First: moves the settings folder from before the rename, before the
+// modules below open their stores in it.
+import './core/userData'
 import { electronApp, optimizer, platform } from '@electron-toolkit/utils'
 import { app } from 'electron'
 import {

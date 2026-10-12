@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Aonsoku",
-  "short_name": "Aonsoku",
+  "name": "Aonsoku-BS",
+  "short_name": "Aonsoku-BS",
   "description": "A modern desktop client for Navidrome/Subsonic servers.",
   "theme_color": "#060E23",
   "categories": ["music", "entertainment"],

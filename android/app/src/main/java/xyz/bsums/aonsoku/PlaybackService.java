@@ -610,7 +610,7 @@ public class PlaybackService extends MediaLibraryService {
         }
         Bundle extras = new Bundle();
         extras.putString(MediaConstants.EXTRAS_KEY_ERROR_RESOLUTION_ACTION_LABEL_COMPAT,
-            "Open Aonsoku");
+            "Open Aonsoku-BS");
         PendingIntent launch = launchIntent();
         if (launch != null) {
             extras.putParcelable(
@@ -620,7 +620,7 @@ public class PlaybackService extends MediaLibraryService {
         return LibraryResult.ofError(
             new SessionError(
                 SessionError.ERROR_SESSION_AUTHENTICATION_EXPIRED,
-                "Sign in to Aonsoku on your phone",
+                "Sign in to Aonsoku-BS on your phone",
                 extras),
             errorParams);
     }

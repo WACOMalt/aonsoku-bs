@@ -695,7 +695,7 @@
     "privacy": {
       "services": {
         "group": "Externí služby",
-        "description": "Spravujte externí služby, ke kterým má Aonsoku přístup.",
+        "description": "Spravujte externí služby, ke kterým má Aonsoku-BS přístup.",
         "lrclib": {
           "info": "K vyhledávání textů písní je použito LRCLIB.",
           "label": "LRCLIB",

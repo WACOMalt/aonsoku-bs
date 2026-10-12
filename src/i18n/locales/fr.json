@@ -538,7 +538,7 @@
             "example": "Exemple : https://my-lrclib.com"
           }
         },
-        "description": "Gérer les services externes auxquels Aonsoku peut accéder.",
+        "description": "Gérer les services externes auxquels Aonsoku-BS peut accéder.",
         "animatedCover": {
           "enabled": {
             "label": "Activer les pochettes d'album animées",

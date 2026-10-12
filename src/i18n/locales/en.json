@@ -766,7 +766,7 @@
     "privacy": {
       "services": {
         "group": "External Services",
-        "description": "Manage the external services that Aonsoku can access.",
+        "description": "Manage the external services that Aonsoku-BS can access.",
         "lrclib": {
           "info": "LRCLIB is used to find song lyrics.",
           "label": "LRCLIB",

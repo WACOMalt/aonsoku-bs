@@ -684,7 +684,7 @@
     "privacy": {
       "services": {
         "group": "Külső szolgáltatások",
-        "description": "Kezeld azokat a külső szolgáltatásokat, amelyekhez az Aonsoku hozzáférhet.",
+        "description": "Kezeld azokat a külső szolgáltatásokat, amelyekhez az Aonsoku-BS hozzáférhet.",
         "lrclib": {
           "info": "Az LRCLIB segít a dalszövegeket megtalálni.",
           "label": "LRCLIB",

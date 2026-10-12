@@ -368,7 +368,7 @@
     "privacy": {
       "services": {
         "group": "Serviços Externos",
-        "description": "Gira os serviços externos que o Aonsoku pode aceder.",
+        "description": "Gira os serviços externos que o Aonsoku-BS pode aceder.",
         "lrclib": {
           "info": "O LRCLIB é usado para encontrar letras de músicas.",
           "label": "LRCLIB",

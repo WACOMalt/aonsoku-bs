@@ -352,7 +352,7 @@
     "privacy": {
       "services": {
         "group": "외부 서비스",
-        "description": "Aonsoku가 접근할 수 있는 외부 서비스를 관리합니다.",
+        "description": "Aonsoku-BS가 접근할 수 있는 외부 서비스를 관리합니다.",
         "lrclib": {
           "info": "LRCLIB은 가사 검색에 사용됩니다.",
           "label": "LRCLIB"

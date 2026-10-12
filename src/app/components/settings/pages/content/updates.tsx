@@ -30,8 +30,8 @@ export function UpdatesContent() {
       </Header>
       <Content>
         <ContentItem>
-          <ContentItemTitle info="Looks for a newer version in the background each time Aonsoku starts, and offers it if there is one.">
-            Check for updates when Aonsoku starts
+          <ContentItemTitle info="Looks for a newer version in the background each time Aonsoku-BS starts, and offers it if there is one.">
+            Check for updates when Aonsoku-BS starts
           </ContentItemTitle>
           <ContentItemForm>
             <Switch checked={autoCheck} onCheckedChange={setAutoCheck} />

@@ -763,7 +763,7 @@
             "example": "Przykład: https://my-lrclib.com"
           }
         },
-        "description": "Zarządzaj usługami zewnętrznymi do których Aonsoku może uzyskać dostęp.",
+        "description": "Zarządzaj usługami zewnętrznymi do których Aonsoku-BS może uzyskać dostęp.",
         "animatedCover": {
           "enabled": {
             "label": "Włącz animowane okładki",

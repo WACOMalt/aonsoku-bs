@@ -53,7 +53,7 @@ export function SyncServerContent() {
               )
             : t(
                 'settings.content.syncServer.descriptionElectron',
-                'In the desktop app, you must set the URL of your Aonsoku web deployment so Jam and Connect features can reach the sync server.',
+                'In the desktop app, you must set the URL of your Aonsoku-BS web deployment so Jam and Connect features can reach the sync server.',
               )}
         </HeaderDescription>
       </Header>
@@ -62,7 +62,7 @@ export function SyncServerContent() {
           <ContentItemTitle
             info={t(
               'settings.content.syncServer.url.info',
-              'The base URL of your Aonsoku web app (e.g. https://mus.example.com). The jam-sync server must be running behind this URL.',
+              'The base URL of your Aonsoku-BS web app (e.g. https://mus.example.com). The jam-sync server must be running behind this URL.',
             )}
           >
             {t('settings.content.syncServer.url.label', 'Sync Server URL')}

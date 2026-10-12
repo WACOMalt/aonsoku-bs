@@ -95,7 +95,7 @@ export function UpdateObserver() {
       })
       toast.update('update', {
         render: isAndroid
-          ? 'Downloaded. Confirm the update, then open Aonsoku again.'
+          ? 'Downloaded. Confirm the update, then open Aonsoku-BS again.'
           : t('update.toasts.success'),
         type: 'success',
         autoClose: 5000,
@@ -149,7 +149,7 @@ export function UpdateObserver() {
 
         {needsPermission && (
           <p className="text-sm">
-            To update, allow Aonsoku to install apps. Tap{' '}
+            To update, allow Aonsoku-BS to install apps. Tap{' '}
             <strong>Open setting</strong>, turn on{' '}
             <strong>Allow from this source</strong>, come back, then tap{' '}
             <strong>Install update</strong> again.

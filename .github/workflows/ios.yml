@@ -70,7 +70,7 @@ jobs:
 
       - name: Package the .ipa
         run: |
-          ASSET="Aonsoku-${VERSION}-ios.ipa"
+          ASSET="Aonsoku-BS-${VERSION}-ios.ipa"
           mkdir -p "$RUNNER_TEMP/ipa/Payload"
           cp -R "$RUNNER_TEMP/App.xcarchive/Products/Applications/App.app" "$RUNNER_TEMP/ipa/Payload/"
           (cd "$RUNNER_TEMP/ipa" && zip -qry "$GITHUB_WORKSPACE/$ASSET" Payload)
@@ -94,7 +94,7 @@ jobs:
 
       - name: Package the Simulator build
         run: |
-          SIM_ASSET="Aonsoku-${VERSION}-ios-simulator.zip"
+          SIM_ASSET="Aonsoku-BS-${VERSION}-ios-simulator.zip"
           APP="$RUNNER_TEMP/sim/Build/Products/Release-iphonesimulator/App.app"
           lipo -info "$APP/App"
           (cd "$(dirname "$APP")" && zip -qry "$GITHUB_WORKSPACE/$SIM_ASSET" App.app)

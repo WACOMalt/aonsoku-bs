@@ -611,7 +611,7 @@
     "privacy": {
       "services": {
         "group": "Externe Dienste",
-        "description": "Legt fest welche Dienste Aonsoku verwenden kann",
+        "description": "Legt fest welche Dienste Aonsoku-BS verwenden kann",
         "lrclib": {
           "info": "LRCLIB wird für Liedtexte verwendet.",
           "label": "LRCLIB",

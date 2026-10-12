@@ -662,7 +662,7 @@
     "privacy": {
       "services": {
         "group": "Ulkoiset palvelut",
-        "description": "Hallinnoi ulkoisia palveluita joita Aonsoku voi käyttää.",
+        "description": "Hallinnoi ulkoisia palveluita joita Aonsoku-BS voi käyttää.",
         "lrclib": {
           "info": "LRCLIB -palvelua käytetään sanoitusten hakuun.",
           "label": "LRCLIB",

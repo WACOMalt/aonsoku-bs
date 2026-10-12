@@ -46,7 +46,7 @@ const INVITE_MESSAGES: Record<InviteResult, string> = {
   sent: 'Invite sent.',
   accepted: 'They had invited you too. You are now friends.',
   not_found:
-    'No Aonsoku user with that name yet. They need to open Aonsoku once.',
+    'No Aonsoku-BS user with that name yet. They need to open Aonsoku-BS once.',
   self: "That's you.",
   already_friends: "You're already friends.",
   already_invited: 'You already invited them.',

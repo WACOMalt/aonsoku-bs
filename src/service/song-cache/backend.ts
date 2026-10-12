@@ -76,7 +76,7 @@ const android = () => {
   return androidPlugin
 }
 
-/** Android: saves a file to Downloads/Aonsoku ("Save file"). */
+/** Android: saves a file to Downloads/Aonsoku-BS ("Save file"). */
 export function saveFileOnAndroid(url: string, fileName: string) {
   return android().saveFile({ url, fileName })
 }

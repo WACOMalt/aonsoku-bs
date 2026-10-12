@@ -89,7 +89,7 @@ final class CarLibrary {
     }
 
     static MediaItem root() {
-        return folder(ROOT, "Aonsoku", null, MediaMetadata.MEDIA_TYPE_FOLDER_MIXED);
+        return folder(ROOT, "Aonsoku-BS", null, MediaMetadata.MEDIA_TYPE_FOLDER_MIXED);
     }
 
     /** The tabs, and defaults for how lists show (see the root's extras). */
@@ -159,7 +159,7 @@ final class CarLibrary {
     static List<MediaItem> signInHint() {
         MediaMetadata metadata = new MediaMetadata.Builder()
             .setTitle("Sign in on your phone")
-            .setSubtitle("Open Aonsoku on your phone and connect to your server")
+            .setSubtitle("Open Aonsoku-BS on your phone and connect to your server")
             .setIsBrowsable(false)
             .setIsPlayable(false)
             .build();

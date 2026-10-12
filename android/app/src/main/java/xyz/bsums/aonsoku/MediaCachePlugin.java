@@ -145,7 +145,7 @@ public class MediaCachePlugin extends Plugin {
     }
 
     /**
-     * { url, fileName }: saves a file to Downloads/Aonsoku with Android's
+     * { url, fileName }: saves a file to Downloads/Aonsoku-BS with Android's
      * download manager, which shows its progress and a notification when
      * it's done.
      */
@@ -163,7 +163,7 @@ public class MediaCachePlugin extends Plugin {
                 .setNotificationVisibility(
                     DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
                 .setDestinationInExternalPublicDir(
-                    Environment.DIRECTORY_DOWNLOADS, "Aonsoku/" + fileName);
+                    Environment.DIRECTORY_DOWNLOADS, "Aonsoku-BS/" + fileName);
             DownloadManager downloads =
                 (DownloadManager) getContext().getSystemService(Context.DOWNLOAD_SERVICE);
             downloads.enqueue(request);

@@ -667,7 +667,7 @@
     "privacy": {
       "services": {
         "group": "Externa tjänster",
-        "description": "Hantera externa tjänster som Aonsoku får åtkomst till.",
+        "description": "Hantera externa tjänster som Aonsoku-BS får åtkomst till.",
         "lrclib": {
           "info": "LRCLIB används för att hitta sångtexter.",
           "label": "LRCLIB",

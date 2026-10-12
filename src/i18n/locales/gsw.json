@@ -680,7 +680,7 @@
     "privacy": {
       "services": {
         "group": "Externi Dienst",
-        "description": "Leit fest weli Dienst Aonsoku verwende chan.",
+        "description": "Leit fest weli Dienst Aonsoku-BS verwende chan.",
         "lrclib": {
           "info": "LRCLIB wird brucht zum Liedtext z'finde.",
           "label": "LRCLIB",

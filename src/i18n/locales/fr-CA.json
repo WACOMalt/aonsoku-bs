@@ -325,7 +325,7 @@
     "privacy": {
       "services": {
         "group": "Services externes",
-        "description": "Gérer les services externes auxquels Aonsoku peut accéder.",
+        "description": "Gérer les services externes auxquels Aonsoku-BS peut accéder.",
         "lrclib": {
           "info": "LRCLIB est utilisé pour trouver les paroles.",
           "label": "LRCLIB",
