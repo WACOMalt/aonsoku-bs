@@ -7,8 +7,8 @@ android {
         applicationId "xyz.bsums.aonsoku"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 42
-        versionName "0.20.1"
+        versionCode 43
+        versionName "0.21.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         // Host whose /jam/<id> links this app opens. It must serve
         // /.well-known/assetlinks.json listing the release signing key.
