@@ -7,7 +7,9 @@
 //! instance each time), so everything that must last between calls is kept
 //! in the plugin cache.
 
+mod job;
 mod link;
+pub mod tags;
 mod settings;
 
 use extism_pdk::*;
@@ -35,6 +37,7 @@ struct Tagger;
 
 impl InitProvider for Tagger {
     fn on_init(&self) -> Result<(), LifecycleError> {
+        job::create_queue();
         link::start().map_err(|e| LifecycleError::new(e.to_string()))
     }
 }
@@ -50,8 +53,10 @@ impl CallbackProvider for Tagger {
 
 impl TaskExecuteProvider for Tagger {
     fn on_task_execute(&self, req: TaskExecuteRequest) -> Result<String, TaskError> {
-        // Writing comes in the next step.
-        Err(TaskError::new(format!("Unknown task queue {}", req.queue_name)))
+        if req.queue_name != job::QUEUE {
+            return Err(TaskError::new(format!("Unknown task queue {}", req.queue_name)));
+        }
+        job::run(&req.payload).map_err(TaskError::new)
     }
 }
 

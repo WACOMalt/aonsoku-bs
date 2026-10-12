@@ -106,6 +106,7 @@ pub fn on_message(text: &str) {
     match message.kind.as_str() {
         "welcome" => info!("The Aonsoku-BS server accepted the connection"),
         "pong" => {}
+        "write" => crate::job::accept(text),
         other => warn!("Unknown message from the Aonsoku-BS server: {other}"),
     }
 }
