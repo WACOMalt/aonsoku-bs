@@ -10,7 +10,13 @@ interface IError {
 }
 
 export default function ErrorPage({ status, statusText }: IError) {
-  const error = useRouteError() as IError
+  const routeError = useRouteError()
+  // A page that crashed throws an Error: show its message.
+  const error = (
+    routeError instanceof Error
+      ? { status: 500, data: routeError.message }
+      : routeError
+  ) as IError
 
   return (
     <div className="w-full h-content flex flex-col justify-center items-center">

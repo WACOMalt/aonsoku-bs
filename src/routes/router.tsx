@@ -21,6 +21,9 @@ import {
   InfinitySongListFallback,
   SongListFallback,
 } from '@/app/components/fallbacks/song-fallbacks'
+// Not lazy: it renders when a page throws, and a lazy one would suspend
+// there with no fallback, which React turns into a second error (#426).
+import ErrorPage from '@/app/pages/error-page'
 import { albumsLoader } from '@/routes/loaders/albumsLoader'
 import { loginLoader } from '@/routes/loginLoader'
 import { podcastsLoader, protectedLoader } from '@/routes/protectedLoader'
@@ -32,7 +35,6 @@ const Album = lazy(() => import('@/app/pages/albums/album'))
 const AlbumsList = lazy(() => import('@/app/pages/albums/list'))
 const Artist = lazy(() => import('@/app/pages/artists/artist'))
 const ArtistsList = lazy(() => import('@/app/pages/artists/list'))
-const ErrorPage = lazy(() => import('@/app/pages/error-page'))
 const Favorites = lazy(() => import('@/app/pages/favorites/songlist'))
 const Login = lazy(() => import('@/app/pages/login'))
 const PlaylistsPage = lazy(() => import('@/app/pages/playlists/list'))
