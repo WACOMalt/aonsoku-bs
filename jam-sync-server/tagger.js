@@ -126,7 +126,7 @@ function createTagger({
   async function write(body) {
     const auth = body?.auth;
     if (!isCredentials(auth)) return [401, { error: 'UNAUTHORIZED' }];
-    const items = validateItems(body?.items);
+    const items = validateItems(body?.items, body?.covers);
     if (typeof items === 'string') return [400, { error: 'VALIDATION_FAILED', message: items }];
 
     let ok;
@@ -154,9 +154,13 @@ function createTagger({
     const jobId = crypto.randomUUID();
     // An album's songs usually share one cover: it goes to the plugin once.
     const covers = {};
+    const ids = new Map();
     const plain = items.map(({ songId, tags, cover }) => {
       if (!cover) return { songId, tags };
-      const coverId = crypto.createHash('sha256').update(cover.dataBase64).digest('hex').slice(0, 16);
+      if (!ids.has(cover)) {
+        ids.set(cover, crypto.createHash('sha256').update(cover.dataBase64).digest('hex').slice(0, 16));
+      }
+      const coverId = ids.get(cover);
       covers[coverId] = { mimeType: cover.mimeType, data: cover.dataBase64 };
       return { songId, tags, coverId };
     });
@@ -345,10 +349,22 @@ function credentialParams(auth) {
   return params;
 }
 
-/** The items, or why they are refused. */
-function validateItems(items) {
+/**
+ * The items, or why they are refused. An item's cover is either the image
+ * itself or the key of one in `covers`, so an album's songs can share one
+ * upload (older apps send the image with every song).
+ */
+function validateItems(items, covers) {
   if (!Array.isArray(items) || items.length === 0) return 'items must be a non-empty list';
   if (items.length > MAX_ITEMS) return `at most ${MAX_ITEMS} items per request`;
+  const shared = new Map();
+  const coverOf = (ref) => {
+    if (typeof ref !== 'string') return validateCover(ref);
+    const upload = covers && typeof covers === 'object' && Object.hasOwn(covers, ref) ? covers[ref] : null;
+    if (!upload) return `there is no cover "${ref}"`;
+    if (!shared.has(ref)) shared.set(ref, validateCover(upload));
+    return shared.get(ref);
+  };
   const seen = new Set();
   const clean = [];
   for (const item of items) {
@@ -361,7 +377,7 @@ function validateItems(items) {
       if (typeof value !== 'string' || value.length > 1000) return `"${field}" must be text`;
       tags[field] = value;
     }
-    const cover = item.cover == null ? null : validateCover(item.cover);
+    const cover = item.cover == null ? null : coverOf(item.cover);
     if (typeof cover === 'string') return `song ${item.songId}: ${cover}`;
     if (Object.keys(tags).length === 0 && !cover) return `nothing to change for song ${item.songId}`;
     clean.push(cover ? { songId: item.songId, tags, cover } : { songId: item.songId, tags });

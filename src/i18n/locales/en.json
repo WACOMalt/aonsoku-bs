@@ -963,6 +963,7 @@
       "WRITE_FAILED": "the file could not be written",
       "COVER_TYPE": "Covers must be JPEG or PNG images.",
       "COVER_TOO_LARGE": "Covers can be at most 15 MB.",
+      "TOO_LARGE": "That's too much to send at once. Choose a smaller cover, or edit fewer songs at a time.",
       "UPSTREAM_UNAVAILABLE": "The lookup service isn't reachable right now.",
       "MUSICBRAINZ_BUSY": "MusicBrainz is busy right now. Try again in a moment.",
       "FINGERPRINT_FAILED": "The song couldn't be listened to. Try again, or search by name."

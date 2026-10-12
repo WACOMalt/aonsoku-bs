@@ -103,16 +103,30 @@ async function write(
   const url = taggerUrl('write')
   const auth = getSyncAuth()
   if (!url || !auth) throw new TaggerError('TAGGER_UNAVAILABLE')
+  // Songs that share a cover (an album's, usually) share one upload.
+  const covers: Record<string, CoverUpload> = {}
+  const keys = new Map<CoverUpload, string>()
+  const sent = items.map(({ cover, ...item }) => {
+    if (!cover) return item
+    let key = keys.get(cover)
+    if (!key) {
+      key = `cover${keys.size}`
+      keys.set(cover, key)
+      covers[key] = cover
+    }
+    return { ...item, cover: key }
+  })
   let res: Response
   try {
     res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ auth, items, folderCover }),
+      body: JSON.stringify({ auth, items: sent, covers, folderCover }),
     })
   } catch {
     throw new TaggerError('TAGGER_UNAVAILABLE')
   }
+  if (res.status === 413) throw new TaggerError('TOO_LARGE')
   const body = await res.json().catch(() => null)
   if (!res.ok) throw new TaggerError(body?.error ?? 'TAGGER_UNAVAILABLE')
   return body

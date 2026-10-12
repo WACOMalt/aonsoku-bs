@@ -170,6 +170,44 @@ test('a shared cover goes to the plugin once, with the folder choice', async () 
   plugin.close();
 });
 
+test('songs can share one uploaded cover', async () => {
+  const plugin = await connectPlugin();
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64');
+  let job;
+  plugin.on('message', (data) => {
+    const message = JSON.parse(data);
+    if (message.type !== 'write') return;
+    job = message;
+    for (const item of message.items) {
+      plugin.send(JSON.stringify({ type: 'result', jobId: message.jobId, songId: item.songId, ok: true }));
+    }
+    plugin.send(JSON.stringify({ type: 'done', jobId: message.jobId, scanTriggered: true }));
+  });
+  const res = await write({
+    auth: admin,
+    covers: { front: { mimeType: 'image/jpeg', dataBase64: jpeg } },
+    items: [
+      { songId: 'a', cover: 'front' },
+      { songId: 'b', tags: { title: 'B' }, cover: 'front' },
+    ],
+  });
+  assert.equal(res.status, 200);
+  const [coverId] = Object.keys(job.covers);
+  assert.deepEqual(job.covers, { [coverId]: { mimeType: 'image/jpeg', data: jpeg } });
+  assert.deepEqual(job.items, [
+    { songId: 'a', tags: {}, coverId },
+    { songId: 'b', tags: { title: 'B' }, coverId },
+  ]);
+  plugin.close();
+});
+
+test('a cover key must name an uploaded cover', () => {
+  const items = [{ songId: 'a', cover: 'front' }];
+  assert.match(validateItems(items), /no cover "front"/);
+  assert.match(validateItems(items, { other: {} }), /no cover "front"/);
+  assert.match(validateItems(items, { front: { mimeType: 'image/gif', dataBase64: 'R0lGOD' } }), /JPEG or PNG/);
+});
+
 test('covers must be JPEG or PNG images under 15 MB', () => {
   const item = (cover) => [{ songId: 'a', cover }];
   assert.match(validateItems(item({ mimeType: 'image/gif', dataBase64: 'R0lGOD' })), /JPEG or PNG/);
