@@ -5,7 +5,7 @@ import { useAppStore } from '@/store/app.store'
 import { useConnectStore } from '@/store/connect.store'
 import { useJamStore } from '@/store/jam.store'
 import { usePlayerStore } from '@/store/player.store'
-import { PlaybackSource } from '@/types/playerContext'
+import { LoopState, PlaybackSource } from '@/types/playerContext'
 import { ISong } from '@/types/responses/song'
 import {
   clearJamSnapshot,
@@ -201,6 +201,9 @@ class JamService {
         timestamp: number
         queue?: ISong[]
         source?: PlaybackSource | null
+        loopState?: LoopState
+        isShuffleActive?: boolean
+        originalQueue?: ISong[]
       }) => {
         const { isLead, canGuestsControl } = useJamStore.getState()
         // Lead only syncs from guests when canGuestsControl is enabled
@@ -305,6 +308,8 @@ class JamService {
       songId: currentSong.id,
       isPlaying: playerState.isPlaying,
       progress: playerProgress.progress,
+      loopState: playerState.loopState,
+      isShuffleActive: playerState.isShuffleActive,
       // With the queue, what it plays from, so guests show the right album
       // or playlist as playing.
       ...(queueChanged
@@ -312,6 +317,11 @@ class JamService {
             queue: songlist.currentList,
             source: playerState.playbackContext.source ?? null,
           }
+        : {}),
+      // The order to go back to when shuffle is turned off, by whoever
+      // turns it off.
+      ...(queueChanged && playerState.isShuffleActive
+        ? { originalQueue: songlist.originalList }
         : {}),
       timestamp: Date.now(),
     })
@@ -371,6 +381,9 @@ class JamService {
     timestamp: number
     queue?: ISong[]
     source?: PlaybackSource | null
+    loopState?: LoopState
+    isShuffleActive?: boolean
+    originalQueue?: ISong[]
   }) {
     // Set flag so both the drift-correction subscriber AND the emit subscriber
     // ignore changes we make here, preventing feedback loops
@@ -448,6 +461,26 @@ class JamService {
           }
         }
       }
+
+      // Repeat and shuffle are the Jam's, not each listener's. The queue
+      // above already carries the shuffled order.
+      usePlayerStore.setState((state) => {
+        if (
+          typeof data.loopState === 'number' &&
+          state.playerState.loopState !== data.loopState
+        ) {
+          state.playerState.loopState = data.loopState
+        }
+        if (
+          typeof data.isShuffleActive === 'boolean' &&
+          state.playerState.isShuffleActive !== data.isShuffleActive
+        ) {
+          state.playerState.isShuffleActive = data.isShuffleActive
+        }
+        if (data.isShuffleActive && data.originalQueue) {
+          state.songlist.originalList = data.originalQueue
+        }
+      })
 
       // The lead's queue plays from its album or playlist, not from what this
       // listener played before (which would show as playing).
