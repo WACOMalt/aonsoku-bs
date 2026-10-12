@@ -14,7 +14,9 @@ import { appName } from '@/utils/appName'
 export function getSyncAuth(): Record<string, string> | null {
   const { username, password, authType, protocolVersion } =
     useAppStore.getState().data
-  if (!username || !password || !authType) return null
+  // authType is an enum whose first value (password) is 0.
+  if (!username || !password || authType === null || authType === undefined)
+    return null
 
   try {
     return {
