@@ -26,8 +26,9 @@ disagree, this plan wins.
 
 1. **Plugin `aonsoku-bs-tagger`** (Rust, Navidrome's `nd-pdk`, wasm32-wasip1, `lofty` ≥ 0.25.4).
    - Permissions: library (filesystem, write access granted by the admin), matcher,
-     websocket (requiredHosts: the sync server), subsonicapi + users (for startScan),
-     scheduler (reconnect), taskqueue (one file at a time), http (cover image download).
+     websocket (requiredHosts: the sync server), subsonicapi + users (admin check,
+     startScan), http (Navidrome's own ping on localhost, to check credentials),
+     scheduler (reconnect), taskqueue (one file at a time), http also for cover downloads.
    - Settings (Navidrome's plugin settings form): sync server URL, shared secret, admin
      user for scans.
    - Opens `wss://<sync server>/tagger-plugin`, authenticates with the secret, and keeps
@@ -55,6 +56,24 @@ disagree, this plan wins.
    - MusicBrainz lookup with track mapping, a cover picker, and fingerprint Identify
      (chromaprint WASM in a worker, in the last phase).
    - Caches refresh after a write.
+
+## Who can edit
+
+No separate sign-in: the tagger uses the Subsonic credentials the app already signed in
+with (user + token and salt, or password, as the app does), on every platform. Only
+Navidrome admins can edit, and that is checked three times:
+
+1. The app shows "Edit tags" only when the signed-in user is an admin (`getUser` →
+   `adminRole`) and the plugin is connected.
+2. The sync server checks each write's credentials against Navidrome (`ping`) and the
+   admin role (`getUser`). Not an admin: 403.
+3. The plugin checks again before touching a file: it sends the same credentials to
+   Navidrome's own `ping` over localhost (inside the NAS container) and checks the admin
+   role through its Subsonic API service. So the shared secret only protects the link
+   between the sync server and the plugin; without a real admin's credentials nothing is
+   written, even if the secret leaks.
+
+Removing a user's admin flag in Navidrome locks them out at the next edit.
 
 ## Writing a file safely in a plugin
 
